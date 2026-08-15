@@ -1,10 +1,11 @@
-"""The stdio MCP server the client talks to; every request is proxied by the gateway."""
+"""The MCP server the client talks to; every request is proxied by the gateway."""
 
 from __future__ import annotations
 
 import logging
 
 import mcp_types as types
+import uvicorn
 from mcp.server.context import ServerRequestContext
 from mcp.server.lowlevel.server import NotificationOptions, Server
 from mcp.server.stdio import stdio_server
@@ -46,18 +47,46 @@ def build_server(gateway: MCPGateway) -> Server[None]:
     )
 
 
+def _announce(gateway: MCPGateway, how: str) -> None:
+    logger.info(
+        "serving %d upstream(s), %d tool(s) over %s",
+        len(gateway.upstreams),
+        len(gateway.list_tools()),
+        how,
+    )
+
+
 async def serve_stdio(gateway: MCPGateway) -> None:
-    """Connect the upstreams, then serve over stdio until the client leaves."""
+    """Connect the upstreams, then serve over stdio until the client leaves.
+
+    The client owns this process: it spawns the gateway and kills it on exit.
+    """
     async with gateway:
         server = build_server(gateway)
-        logger.info(
-            "serving %d upstream(s), %d tool(s)",
-            len(gateway.upstreams),
-            len(gateway.list_tools()),
-        )
+        _announce(gateway, "stdio")
         async with stdio_server() as (read_stream, write_stream):
             await server.run(
                 read_stream,
                 write_stream,
                 server.create_initialization_options(NotificationOptions(tools_changed=True)),
             )
+
+
+async def serve_http(gateway: MCPGateway, host: str, port: int, path: str = "/mcp") -> None:
+    """Serve over streamable HTTP as a long-lived process of its own.
+
+    Unlike stdio, this outlives any one client and several may connect at once —
+    which also means they share one verification state, so a taint raised by one
+    client constrains the others.
+    """
+    async with gateway:
+        server = build_server(gateway)
+        app = server.streamable_http_app(streamable_http_path=path, host=host)
+        _announce(gateway, f"http://{host}:{port}{path}")
+        if host not in ("127.0.0.1", "localhost", "::1"):
+            logger.warning(
+                "bound to %s: anyone who can reach this port can call every upstream tool", host
+            )
+        # log_config=None keeps uvicorn from replacing the audit formatter.
+        config = uvicorn.Config(app, host=host, port=port, log_config=None, access_log=False)
+        await uvicorn.Server(config).serve()
