@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from typing import Any
@@ -16,6 +17,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.shared.exceptions import MCPError
 
+from mcp_guard import audit
 from mcp_guard.auth import UpstreamAuth
 from mcp_guard.policy import Policy, PolicyDecision, ToolCall
 
@@ -97,10 +99,12 @@ class MCPGateway:
         *,
         policy: Policy | None = None,
         separator: str = PREFIX_SEPARATOR,
+        log_arguments: str = "redacted",
     ) -> None:
         self._upstreams: dict[str, Upstream] = {}
         self._policy = policy or Policy()
         self._separator = separator
+        self._log_arguments = log_arguments
         self._exit_stack: AsyncExitStack | None = None
         self._refresh_lock = anyio.Lock()
 
@@ -297,23 +301,48 @@ class MCPGateway:
             arguments=arguments or {},
             definition=tool,
         )
+        shown = audit.render_arguments(call.arguments, mode=self._log_arguments)
         decision = self._policy.check_tool_call(call)
         if not decision.allowed:
-            logger.warning("blocked %s: %s", public_name, decision.reason)
+            audit.call(
+                verdict="DENY",
+                tool=public_name,
+                arguments=shown,
+                detail=decision.reason or "denied by policy",
+                level=logging.WARNING,
+            )
             return _denied_result(call, decision)
 
         if upstream.client is None:
+            audit.call(verdict="ERROR", tool=public_name, arguments=shown, detail="upstream not connected")
             return _error_result(f"upstream {upstream.name!r} is not connected")
 
+        started = time.perf_counter()
         try:
-            return await upstream.client.call_tool(tool.name, arguments)
-        except MCPError as exc:
-            logger.warning("upstream %s: tools/call %s failed: %s", upstream.name, tool.name, explain(exc))
-            return _error_result(f"upstream {upstream.name!r} returned an error: {exc}")
+            result = await upstream.client.call_tool(tool.name, arguments)
         except Exception as exc:
-            logger.error("upstream %s: tools/call %s failed: %s", upstream.name, tool.name, explain(exc))
+            audit.call(
+                verdict="ERROR",
+                tool=public_name,
+                arguments=shown,
+                detail=explain(exc),
+                elapsed_ms=(time.perf_counter() - started) * 1000,
+                level=logging.WARNING if isinstance(exc, MCPError) else logging.ERROR,
+            )
             logger.debug("upstream %s: tools/call traceback", upstream.name, exc_info=True)
+            if isinstance(exc, MCPError):
+                return _error_result(f"upstream {upstream.name!r} returned an error: {exc}")
             return _error_result(f"calling {public_name!r} failed: {explain(exc)}")
+
+        audit.call(
+            verdict="ALLOW" if decision.verified else "PASS",
+            tool=public_name,
+            arguments=shown,
+            detail=decision.detail or "",
+            elapsed_ms=(time.perf_counter() - started) * 1000,
+            level=logging.INFO if decision.verified else logging.WARNING,
+        )
+        return result
 
 
 def explain(exc: BaseException) -> str:

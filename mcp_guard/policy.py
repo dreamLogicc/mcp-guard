@@ -29,14 +29,21 @@ class PolicyDecision:
 
     allowed: bool
     reason: str | None = None
+    """Why it was denied; shown to the model and written to the audit line."""
+
+    detail: str | None = None
+    """What the policy wants on the audit line either way, e.g. the resulting state."""
+
+    verified: bool = True
+    """False when the policy had no rule for this call and let it through by default."""
 
     @classmethod
-    def allow(cls) -> PolicyDecision:
-        return cls(allowed=True)
+    def allow(cls, detail: str | None = None, *, verified: bool = True) -> PolicyDecision:
+        return cls(allowed=True, detail=detail, verified=verified)
 
     @classmethod
-    def deny(cls, reason: str) -> PolicyDecision:
-        return cls(allowed=False, reason=reason)
+    def deny(cls, reason: str, detail: str | None = None) -> PolicyDecision:
+        return cls(allowed=False, reason=reason, detail=detail)
 
 
 class Policy:

@@ -1,20 +1,22 @@
-"""Command line entry point: `mcp-guard` reads its upstreams from the YAML config."""
+"""Command line entry point."""
 
 from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 
 import anyio
 
+from mcp_guard import audit
 from mcp_guard.auth import AuthError
 from mcp_guard.config import CONFIG_ENV_VAR, POLICY_ENV_VAR, ConfigError, load_policy_spec, load_upstreams
 from mcp_guard.epca import EPCAPolicy, SpecError
 from mcp_guard.gateway import GatewayError, MCPGateway
 from mcp_guard.server import serve_stdio
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("mcp_guard.cli")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -27,15 +29,16 @@ def build_parser() -> argparse.ArgumentParser:
             "unverified must be something you asked for, not something you got by omission."
         ),
     )
+    parser.add_argument("--config", metavar="PATH", help=f"Server list (YAML). Defaults to ${CONFIG_ENV_VAR}.")
+    parser.add_argument("--policy", metavar="PATH", help=f"ePCA policy (YAML). Defaults to ${POLICY_ENV_VAR}.")
     parser.add_argument(
-        "--config",
-        metavar="PATH",
-        help=f"Server list (YAML). Defaults to ${CONFIG_ENV_VAR}.",
-    )
-    parser.add_argument(
-        "--policy",
-        metavar="PATH",
-        help=f"ePCA policy (YAML). Defaults to ${POLICY_ENV_VAR}.",
+        "--log-arguments",
+        default="redacted",
+        choices=list(audit.ARGUMENT_MODES),
+        help=(
+            "How much of each call's arguments to log. 'redacted' (default) blanks "
+            "credential-looking keys and truncates; 'full' writes them verbatim, secrets included."
+        ),
     )
     parser.add_argument(
         "--log-level",
@@ -43,42 +46,53 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Logging verbosity (logs go to stderr; stdout is the MCP transport).",
     )
+    parser.add_argument(
+        "--color",
+        default="auto",
+        choices=["auto", "always", "never"],
+        help="Colourise the log. 'auto' colours only when stderr is a terminal.",
+    )
     return parser
+
+
+def _setup_logging(level: str, color: str) -> None:
+    # stdout belongs to the MCP transport, so logs must go to stderr.
+    if color == "auto":
+        enabled = sys.stderr.isatty() and os.environ.get("TERM") != "dumb" and "NO_COLOR" not in os.environ
+    else:
+        enabled = color == "always"
+    audit.enable_color(enabled)
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(audit.Formatter())
+    logging.basicConfig(level=level, handlers=[handler], force=True)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-
-    # stdout belongs to the MCP transport, so logs must go to stderr.
-    logging.basicConfig(
-        level=args.log_level,
-        stream=sys.stderr,
-        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
-    )
+    _setup_logging(args.log_level, args.color)
 
     try:
         spec = load_policy_spec(args.policy)
+        gateway = MCPGateway(policy=EPCAPolicy(spec), log_arguments=args.log_arguments)
         logger.info(
-            "policy: %d invariant(s), %d action(s), default=%s",
+            "policy: %d invariant(s), %d action(s), unmatched tools are %s",
             len(spec.invariants),
             len(spec.actions),
-            spec.default,
+            "denied" if spec.default == "deny" else "ALLOWED UNVERIFIED",
         )
-        gateway = MCPGateway(policy=EPCAPolicy(spec))
 
         for upstream in load_upstreams(args.config):
             registered = gateway.add_upstream(upstream)
             # Up front, so a bad token_env is a config error, not a later connection failure.
             registered.auth.validate(registered.name)
-            logger.info(
-                "upstream %s -> %s (%s)",
-                registered.name,
-                registered.target,
-                registered.auth.describe(registered.name),
-            )
+            logger.info("upstream %s -> %s", registered.name, registered.target)
     except (AuthError, ConfigError, GatewayError, SpecError) as exc:
         print(f"mcp-guard: {exc}", file=sys.stderr)
         return 2
+
+    if args.log_arguments == "full":
+        logger.warning("--log-arguments full: tool arguments are logged verbatim, secrets included")
 
     try:
         anyio.run(serve_stdio, gateway)

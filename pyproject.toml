@@ -21,7 +21,6 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    # Imported directly, so required here rather than relied on through mcp.
     "anyio>=4.9",
     "httpx2>=2.5.0",
     "mcp>=2.0.0",

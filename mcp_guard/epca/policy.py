@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import logging
-
 from mcp_guard.epca.monitor import ReferenceMonitor
 from mcp_guard.epca.spec import PolicySpec
 from mcp_guard.policy import Policy, PolicyDecision, ToolCall
-
-logger = logging.getLogger(__name__)
 
 
 class EPCAPolicy(Policy):
@@ -29,19 +25,7 @@ class EPCAPolicy(Policy):
     def check_tool_call(self, call: ToolCall) -> PolicyDecision:
         verdict = self._monitor.check(call.public_name, call.upstream, call.arguments)
         if not verdict.allowed:
-            logger.warning(
-                "DENY %s [%s]: %s",
-                call.public_name,
-                ", ".join(verdict.actions) or "no action",
-                verdict.reason,
-            )
             return PolicyDecision.deny(verdict.reason or "denied by policy")
-
-        if verdict.actions:
-            logger.info(
-                "ALLOW %s [%s] -> %s",
-                call.public_name,
-                ", ".join(verdict.actions),
-                self._monitor.describe_state(),
-            )
-        return PolicyDecision.allow()
+        if not verdict.actions:
+            return PolicyDecision.allow("no policy action covers this tool", verified=False)
+        return PolicyDecision.allow(f"[{', '.join(verdict.actions)}] {self._monitor.describe_state()}")
