@@ -3,17 +3,8 @@
 An MCP gateway that fronts several MCP servers behind one connection and checks
 every tool call against a formal policy before forwarding it.
 
-```
-Claude / Cursor / your own agent
-              │  stdio
-              ▼
-       ┌─────────────────┐
-       │    mcp-guard    │──▶ policy check
-       └──────┬──────────┘
-       ┌──────┼──────────┐
-       ▼      ▼          ▼
-     MCP A  MCP B      MCP C
-```
+![mcp-guard proxying an agent's tool calls: reading a secret through one server
+closes the exits on the others](assets/demo.svg)
 
 The client sees one server. Tools keep their upstream as a prefix — `github`'s
 `create_issue` arrives as `github__create_issue`.
@@ -22,11 +13,11 @@ The policy is not a list of forbidden tools. It is a state machine checked by an
 SMT solver, so it can forbid a *sequence* whose steps are each unremarkable:
 
 ```
-ALLOW fs__read_file      "path"="…/README.md"        tainted=False
-ALLOW github__create_pull_request
-ALLOW fs__read_file      "path"="…/.env"             tainted=True
-DENY  github__create_pull_request   fails guard 'publish_to_github'
-DENY  docs__query-docs              fails guard 'query_third_party_docs'
+ALLOW fs__read_file                "path"="…/README.md"   tainted=False
+ALLOW github__create_pull_request                         writes=1
+ALLOW fs__read_file                "path"="…/.env"        tainted=True
+DENY  github__create_pull_request  fails guard 'publish_to_github'
+DENY  docs__query-docs             fails guard 'query_third_party_docs'
 ```
 
 The secret was read through one server and the exits closed on two others. No
@@ -212,10 +203,10 @@ One line per call: verdict, tool, arguments, the rule that fired, the state
 after, upstream latency. Logs go to stderr; stdout belongs to the MCP transport.
 
 ```
-ALLOW fs__read_file    "path"="…/notes.md"                [read_files] tainted=False   7ms
-ALLOW fs__write_file   "path"="…/api.txt", "token"="***"  [never_write_secret_paths]   8ms
-DENY  fs__write_file   "path"="…/copy.txt"   fails guard 'no_writes_after_secret_read'
-PASS  fs__list_directory                     no policy action covers this tool         5ms
+ALLOW fs__read_file       "path"="…/notes.md"                 [read_files] tainted=False         7ms
+ALLOW fs__write_file      "path"="…/api.txt", "token"="***"   [never_write_secret_paths]         8ms
+DENY  fs__write_file      "path"="…/copy.txt"                 fails guard 'no_writes_after_secret_read'
+PASS  fs__list_directory                                      no policy action covers this tool  5ms
 ```
 
 `--log-arguments redacted` (default) blanks credential-shaped keys and shortens

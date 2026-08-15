@@ -1,0 +1,201 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="720" height="300" role="img"
+     aria-label="An agent's tool calls pass through mcp-guard to MCP A, B and C. read_docs, list_files and read_secret all reach their server; the answer to read_secret carries a secret back through the gateway and taints the session, after which send_message and create_issue are turned back at the gateway.">
+  <title>mcp-guard: reading a secret is allowed — publishing after it is not</title>
+  <style>
+    .bg    { fill: #ffffff }
+    .fg    { fill: #1f2328 }
+    .dim   { fill: #6e7781 }
+    .allow { fill: #1a7f37 }
+    .deny  { fill: #cf222e }
+    .warn  { fill: #9a6700 }
+    .wire  { stroke: #d0d7de }
+    .node  { fill: #f6f8fa; stroke: #d0d7de }
+    .gate  { fill: #ddf4ff; stroke: #54aeff }
+    .ring  { fill: none; stroke: #54aeff }
+    @media (prefers-color-scheme: dark) {
+      .bg    { fill: #0d1117 }
+      .fg    { fill: #e6edf3 }
+      .dim   { fill: #8b949e }
+      .allow { fill: #3fb950 }
+      .deny  { fill: #f85149 }
+      .warn  { fill: #d29922 }
+      .wire  { stroke: #30363d }
+      .node  { fill: #161b22; stroke: #30363d }
+      .gate  { fill: #0c2d6b; stroke: #316dca }
+      .ring  { fill: none; stroke: #58a6ff }
+    }
+    text { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 13px }
+    .small { font-size: 11px }
+
+    /* One 15s cycle. Delays are spaced so nothing overtakes anything: the answer
+       leaves MCP C only once the call has arrived, and the refusals come after
+       the session is tainted. Everything animated is visible by default, so a
+       renderer that drops the stylesheet still shows a readable picture. */
+    .step { animation-duration: 15s; animation-iteration-count: infinite; animation-fill-mode: both }
+    .d1 { animation-delay: 0s }     .d2 { animation-delay: 2.5s }
+    .d3 { animation-delay: 5s }      .d3r { animation-delay: 7.3s }
+    .d4 { animation-delay: 9.8s }    .d5 { animation-delay: 12.3s }
+
+    .toA { animation-name: toA }   .toB { animation-name: toB }
+    .toC { animation-name: toC }   .fromC { animation-name: fromC }
+    .stopped { animation-name: stopped }
+
+    /* Packets follow the wires: along, then across, never cutting a corner.
+       Offsets from the agent's edge — 134 gateway in, 260 gateway out,
+       332 the elbow, 398 the server edge; ±58 the branch to A and C. */
+    @keyframes toA {
+      0%   { transform: translate(0,0);          opacity: 0 }
+      2.25%   { transform: translate(0,0);          opacity: 1 }
+      5.25%   { transform: translate(134px,0) }
+      8.25%  { transform: translate(260px,0) }
+      9.75%  { transform: translate(332px,0) }
+      11.25%  { transform: translate(332px,-58px) }
+      12.75%  { transform: translate(398px,-58px); opacity: 1 }
+      15%  { transform: translate(398px,-58px); opacity: 0 }
+      100% { opacity: 0 }
+    }
+    @keyframes toB {
+      0%   { transform: translate(0,0);     opacity: 0 }
+      2.25%   { transform: translate(0,0);     opacity: 1 }
+      6%   { transform: translate(134px,0) }
+      9%  { transform: translate(260px,0) }
+      12.75%  { transform: translate(398px,0); opacity: 1 }
+      15%  { transform: translate(398px,0); opacity: 0 }
+      100% { opacity: 0 }
+    }
+    @keyframes toC {
+      0%   { transform: translate(0,0);         opacity: 0 }
+      2.25%   { transform: translate(0,0);         opacity: 1 }
+      5.25%   { transform: translate(134px,0) }
+      8.25%  { transform: translate(260px,0) }
+      9.75%  { transform: translate(332px,0) }
+      11.25%  { transform: translate(332px,58px) }
+      12.75%  { transform: translate(398px,58px); opacity: 1 }
+      15%  { transform: translate(398px,58px); opacity: 0 }
+      100% { opacity: 0 }
+    }
+    /* The answer coming back. This is the direction a secret actually travels:
+       the tool on the server read it, the agent never sent it. */
+    @keyframes fromC {
+      0%   { transform: translate(398px,58px); opacity: 0 }
+      2.25%   { transform: translate(398px,58px); opacity: 1 }
+      3.75%   { transform: translate(332px,58px) }
+      5.25%   { transform: translate(332px,0) }
+      6.75%   { transform: translate(260px,0) }
+      9.75%  { transform: translate(134px,0) }
+      13.5%  { transform: translate(0,0);        opacity: 1 }
+      15.75%  { transform: translate(0,0);        opacity: 0 }
+      100% { opacity: 0 }
+    }
+    /* Turned back at the gateway, never reaching a server. */
+    @keyframes stopped {
+      0%   { transform: translate(0,0);     opacity: 0 }
+      2.25%   { transform: translate(0,0);     opacity: 1 }
+      5.25%   { transform: translate(134px,0) }
+      9.75%  { transform: translate(134px,0) }
+      13.5%  { transform: translate(0,0);     opacity: 1 }
+      15%  { transform: translate(0,0);     opacity: 0 }
+      100% { opacity: 0 }
+    }
+    /* A call is colourless until the gateway has ruled on it: grey on the way
+       in, green or red on the way out. */
+    .passes { animation-name: passes }
+    @keyframes passes { 0%, 5.25% { fill: #6e7781 } 8.25%, 100% { fill: #1a7f37 } }
+    .turns { animation-name: turns }
+    @keyframes turns { 0%, 5.25% { fill: #6e7781 } 6.75%, 100% { fill: #cf222e } }
+    @media (prefers-color-scheme: dark) {
+      @keyframes passes { 0%, 5.25% { fill: #8b949e } 8.25%, 100% { fill: #3fb950 } }
+      @keyframes turns  { 0%, 5.25% { fill: #8b949e } 6.75%, 100% { fill: #f85149 } }
+    }
+
+    .lit { animation-name: lit; opacity: 0 }
+    @keyframes lit { 0%, 6% { opacity: 0 } 10%, 18% { opacity: 1 } 21%, 100% { opacity: 0 } }
+
+    .verdict { animation-name: verdict; opacity: 0 }
+    @keyframes verdict { 0%, 6% { opacity: 0 } 9%, 19% { opacity: 1 } 22%, 100% { opacity: 0 } }
+
+    /* Flips as the returning answer crosses the gateway (~9s), and stays flipped. */
+    .clean { animation: badge-clean 15s infinite both }
+    .dirty { animation: badge-dirty 15s infinite both }
+    @keyframes badge-clean { 0%, 56% { opacity: 1 } 58%, 100% { opacity: 0 } }
+    @keyframes badge-dirty { 0%, 56% { opacity: 0 } 58%, 97% { opacity: 1 } 100% { opacity: 0 } }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="720" height="300"/>
+
+  <g stroke-width="1.5" fill="none">
+    <line class="wire" x1="118" y1="150" x2="252" y2="150"/>
+    <line class="wire" x1="378" y1="150" x2="516" y2="150"/>
+    <path class="wire" d="M378 150 H450 V92 H516"/>
+    <path class="wire" d="M378 150 H450 V208 H516"/>
+  </g>
+
+  <rect class="node" x="24" y="132" width="94" height="36" rx="7" stroke-width="1"/>
+  <text class="fg" x="46" y="155">agent</text>
+
+  <rect class="gate" x="252" y="126" width="126" height="48" rx="8" stroke-width="1"/>
+  <text class="fg" x="272" y="149">mcp-guard</text>
+  <text class="dim small" x="272" y="165">policy check</text>
+
+  <g transform="translate(315, 108)" text-anchor="middle">
+    <text class="allow step verdict d1" x="0" y="0">ALLOW</text>
+    <text class="allow step verdict d2" x="0" y="0">ALLOW</text>
+    <text class="allow step verdict d3" x="0" y="0">ALLOW</text>
+    <text class="deny  step verdict d4" x="0" y="0">DENY</text>
+    <text class="deny  step verdict d5" x="0" y="0">DENY</text>
+  </g>
+
+  <g transform="translate(315, 202)" text-anchor="middle">
+    <text class="dim small" x="0" y="0">session</text>
+    <text class="dim  clean" x="0" y="19">clean</text>
+    <text class="deny dirty" x="0" y="19">tainted</text>
+  </g>
+
+  <g>
+    <rect class="node" x="516" y="74"  width="104" height="36" rx="7" stroke-width="1"/>
+    <text class="fg" x="540" y="97">MCP A</text>
+    <rect class="ring step lit d1" x="516" y="74" width="104" height="36" rx="7" stroke-width="1.5"/>
+
+    <rect class="node" x="516" y="132" width="104" height="36" rx="7" stroke-width="1"/>
+    <text class="fg" x="540" y="155">MCP B</text>
+    <rect class="ring step lit d2" x="516" y="132" width="104" height="36" rx="7" stroke-width="1.5"/>
+
+    <rect class="node" x="516" y="190" width="104" height="36" rx="7" stroke-width="1"/>
+    <text class="fg" x="540" y="213">MCP C</text>
+    <rect class="ring step lit d3" x="516" y="190" width="104" height="36" rx="7" stroke-width="1.5"/>
+  </g>
+
+  <!-- calls in flight, each labelled with the tool it asks for -->
+  <g transform="translate(118, 150)" text-anchor="middle">
+    <g class="step toA d1">
+      <circle class="step passes d1" cx="0" cy="0" r="5"/>
+      <text class="dim small" x="0" y="-13">read_docs()</text>
+    </g>
+    <g class="step toB d2">
+      <circle class="step passes d2" cx="0" cy="0" r="5"/>
+      <text class="dim small" x="0" y="-13">list_files()</text>
+    </g>
+
+    <!-- allowed: reading is not the leak. The answer is. -->
+    <g class="step toC d3">
+      <circle class="step passes d3" cx="0" cy="0" r="5"/>
+      <text class="dim small" x="0" y="-13">read_secret()</text>
+    </g>
+    <g class="step fromC d3r">
+      <circle class="warn" cx="0" cy="0" r="5"/>
+      <text class="warn small" x="0" y="-13">secret</text>
+    </g>
+
+    <!-- refused: the session has held a secret since -->
+    <g class="step stopped d4">
+      <circle class="step turns d4" cx="0" cy="0" r="5"/>
+      <text class="dim small" x="0" y="-13">send_message(<tspan class="warn">secret</tspan>)</text>
+    </g>
+    <g class="step stopped d5">
+      <circle class="step turns d5" cx="0" cy="0" r="5"/>
+      <text class="dim small" x="0" y="-13">create_issue(<tspan class="warn">secret</tspan>)</text>
+    </g>
+  </g>
+
+  <text class="dim small" x="24" y="272">reading the secret is allowed — carrying it back out is not</text>
+</svg>
