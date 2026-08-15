@@ -1,0 +1,63 @@
+"""The stdio MCP server the client talks to; every request is proxied by the gateway."""
+
+from __future__ import annotations
+
+import logging
+
+import mcp_types as types
+from mcp.server.context import ServerRequestContext
+from mcp.server.lowlevel.server import NotificationOptions, Server
+from mcp.server.stdio import stdio_server
+
+from mcp_guard.gateway import MCPGateway
+
+logger = logging.getLogger(__name__)
+
+SERVER_NAME = "mcp-guard"
+SERVER_VERSION = "0.1.0"
+INSTRUCTIONS = (
+    "Gateway over several MCP servers. Tool names carry their upstream as a prefix. "
+    "Calls are checked against the gateway policy before being forwarded."
+)
+
+
+def build_server(gateway: MCPGateway) -> Server[None]:
+    """Wire a lowlevel MCP server whose tools are the gateway's tools."""
+
+    async def on_list_tools(
+        ctx: ServerRequestContext[None, types.PaginatedRequestParams | None],
+        params: types.PaginatedRequestParams | None,
+    ) -> types.ListToolsResult:
+        # The full union is held in memory, so it is returned unpaginated.
+        return types.ListToolsResult(tools=gateway.list_tools())
+
+    async def on_call_tool(
+        ctx: ServerRequestContext[None, types.CallToolRequestParams],
+        params: types.CallToolRequestParams,
+    ) -> types.CallToolResult:
+        return await gateway.call_tool(params.name, params.arguments)
+
+    return Server(
+        SERVER_NAME,
+        version=SERVER_VERSION,
+        instructions=INSTRUCTIONS,
+        on_list_tools=on_list_tools,
+        on_call_tool=on_call_tool,
+    )
+
+
+async def serve_stdio(gateway: MCPGateway) -> None:
+    """Connect the upstreams, then serve over stdio until the client leaves."""
+    async with gateway:
+        server = build_server(gateway)
+        logger.info(
+            "serving %d upstream(s), %d tool(s)",
+            len(gateway.upstreams),
+            len(gateway.list_tools()),
+        )
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(
+                read_stream,
+                write_stream,
+                server.create_initialization_options(NotificationOptions(tools_changed=True)),
+            )

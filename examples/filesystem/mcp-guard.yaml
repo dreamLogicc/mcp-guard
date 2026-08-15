@@ -1,0 +1,8 @@
+# One upstream: the official filesystem MCP server, spawned locally over stdio.
+servers:
+  fs:
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "${HOME}/mcp-sandbox"

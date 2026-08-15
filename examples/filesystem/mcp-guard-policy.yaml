@@ -1,0 +1,81 @@
+# Policy for @modelcontextprotocol/server-filesystem.
+#
+# That server sandboxes itself to the directories in its argv, but inside them
+# .env and .ssh are as open as notes.md. This is what draws the distinction.
+#
+# Its tool names, prefixed with the `fs` key from mcp-guard.yaml:
+#   fs__read_file  fs__read_text_file  fs__read_media_file  fs__read_multiple_files
+#   fs__write_file  fs__edit_file  fs__create_directory  fs__move_file
+#   fs__list_directory  fs__list_directory_with_sizes  fs__directory_tree
+#   fs__search_files  fs__get_file_info  fs__list_allowed_directories
+
+default: allow
+
+patterns:
+  # Checked against the whole JSON payload, so one list covers `path`, `paths`,
+  # `source`, `destination` and `pattern` alike.
+  secret_paths:
+    - "/.ssh/"
+    - "/.env"
+    - ".env."
+    - "id_rsa"
+    - "id_ed25519"
+    - ".pem"
+    - ".p12"
+    - ".aws/credentials"
+    - ".kube/config"
+    - ".netrc"
+    - ".git-credentials"
+    - ".npmrc"
+    - ".pypirc"
+
+state:
+  tainted:
+    type: bool
+    init: false
+  secret_reads:
+    type: int
+    init: 0
+
+invariants:
+  - name: secret_read_budget
+    expr: secret_reads <= 3
+
+actions:
+  # Reading a secret is allowed but taints the session. For an outright ban, use
+  # `requires: not matches(payload, secret_paths)` instead.
+  - name: read_files
+    match:
+      - fs__read_file
+      - fs__read_text_file
+      - fs__read_media_file
+      - fs__read_multiple_files
+    effect:
+      tainted: tainted or matches(payload, secret_paths)
+      secret_reads: secret_reads + ite(matches(payload, secret_paths), 1, 0)
+
+  # The multi-step defense: reading ~/.ssh/id_rsa is allowed and writing a file is
+  # allowed, but the second after the first is how a key gets copied elsewhere.
+  - name: no_writes_after_secret_read
+    match:
+      - fs__write_file
+      - fs__edit_file
+      - fs__move_file
+      - fs__create_directory
+    requires: not tainted
+
+  # Independent of taint. Covers fs__move_file's `destination` too.
+  - name: never_write_secret_paths
+    match:
+      - fs__write_file
+      - fs__edit_file
+      - fs__move_file
+    requires: not matches(payload, secret_paths)
+
+  # Listings stay open — that is how an agent finds its way around — but a
+  # recursive tree or glob aimed at a secret path is a hunt for keys.
+  - name: no_hunting_for_secrets
+    match:
+      - fs__search_files
+      - fs__directory_tree
+    requires: not matches(payload, secret_paths)
