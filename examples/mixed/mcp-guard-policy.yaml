@@ -1,0 +1,191 @@
+# Policy across four servers at once.
+#
+# This is the case a per-server policy cannot express. The secret is read
+# through one server and leaves through another, and neither call looks wrong
+# on its own: reading a config file is what a coding agent does all day, and
+# opening a pull request is what you asked it for. What is forbidden is the
+# second after the first, and only something sitting in front of both can see
+# that pair.
+#
+# Every tool name below was taken from a live connection to that server —
+# fs 14, github 44, etherscan 20, docs 2 — not from documentation.
+
+default: allow
+
+patterns:
+  # Matched against the whole JSON payload, so one list covers `path`, `paths`,
+  # `source`, `destination`, `pattern` and a github `path` alike.
+  secret_paths:
+    # This repo's own fixture, so the example can be exercised as-is.
+    - "/test_secret"
+    - "secret.txt"
+    - "/.ssh"
+    - "/.env"
+    - ".env."
+    - "id_rsa"
+    - "id_ed25519"
+    - ".pem"
+    - ".p12"
+    - ".aws/"
+    - ".kube/"
+    - ".netrc"
+    - ".git-credentials"
+    - ".npmrc"
+    - ".pypirc"
+    - "terraform.tfstate"
+    - "serviceAccount"
+    - "secrets."
+
+state:
+  # Raised by any sensitive read on any server, never cleared.
+  tainted:
+    type: bool
+    init: false
+  secret_reads:
+    type: int
+    init: 0
+  # Every write or publish that got through, across all servers.
+  writes:
+    type: int
+    init: 0
+  etherscan_calls:
+    type: int
+    init: 0
+
+invariants:
+  # Blast radius, counted across servers rather than per server: an agent that
+  # has touched five different credentials is not doing the task you gave it.
+  - name: secret_read_budget
+    expr: secret_reads <= 5
+  - name: write_budget
+    expr: writes <= 15
+  # The API key has a rate limit and a bill.
+  - name: etherscan_budget
+    expr: etherscan_calls <= 500
+
+actions:
+  # ---- taint sources -------------------------------------------------------
+
+  - name: read_local_files
+    match:
+      - fs__read_file
+      - fs__read_text_file
+      - fs__read_media_file
+      - fs__read_multiple_files
+    effect:
+      tainted: tainted or matches(payload, secret_paths)
+      secret_reads: secret_reads + ite(matches(payload, secret_paths), 1, 0)
+
+  - name: read_repository
+    match:
+      - github__get_file_contents
+      - github__search_code
+      - github__search_commits
+      - github__get_repository_tree
+    effect:
+      tainted: tainted or matches(payload, secret_paths)
+      secret_reads: secret_reads + ite(matches(payload, secret_paths), 1, 0)
+
+  # Secret scanning reports where the credentials are; reading it is reading them.
+  - name: read_security_alerts
+    match:
+      - github__run_secret_scanning
+      - github__list_secret_scanning_alerts
+      - github__get_secret_scanning_alert
+    effect:
+      tainted: true
+      secret_reads: secret_reads + 1
+
+  # ---- egress channels, all closed by the same taint -----------------------
+
+  # Local writes: a secret copied into an ordinary file is a secret waiting to
+  # be committed by the next step.
+  - name: write_local_files
+    match:
+      - fs__write_file
+      - fs__edit_file
+      - fs__move_file
+      - fs__create_directory
+    requires: not tainted
+    effect:
+      writes: writes + 1
+
+  # Anything on GitHub a human will read. Review comments and replies count —
+  # they sound like reviewing rather than publishing, which is what makes them
+  # easy to leave out.
+  - name: publish_to_github
+    match:
+      - github__add_issue_comment
+      - github__issue_write
+      - github__sub_issue_write
+      - github__create_pull_request
+      - github__pull_request_review_write
+      - github__add_comment_to_pending_review
+      - github__add_reply_to_pull_request_comment
+      - github__request_copilot_review
+      - github__create_gist
+      - github__update_gist
+      - github__discussion_comment_write
+    requires: not tainted
+    effect:
+      writes: writes + 1
+
+  - name: write_repository
+    match:
+      - github__create_or_update_file
+      - github__push_files
+      - github__create_branch
+      - github__update_pull_request
+      - github__update_pull_request_branch
+    requires: not tainted
+    effect:
+      writes: writes + 1
+
+  # The channel most policies forget. A documentation lookup sends a free-text
+  # query to a third party, so it carries whatever the model puts in it — a
+  # search box is an upload form with better manners.
+  - name: query_third_party_docs
+    match:
+      - docs__query-docs
+      - docs__resolve-library-id
+    requires: not tainted
+
+  # ---- unconditional ------------------------------------------------------
+
+  - name: never_write_secret_paths
+    match:
+      - fs__write_file
+      - fs__edit_file
+      - fs__move_file
+      - github__create_or_update_file
+      - github__push_files
+    requires: not matches(payload, secret_paths)
+
+  # Recursive hunts aimed at credential paths, at rest or in a repo.
+  - name: no_hunting_for_secrets
+    match:
+      - fs__search_files
+      - fs__directory_tree
+      - github__search_code
+    requires: not matches(payload, secret_paths)
+
+  # Irreversible, or things no unattended agent should do. `false` is a guard
+  # that never holds, so these are refused in every state.
+  - name: never_unattended
+    match:
+      - fs__delete*
+      - github__delete_file
+      - github__merge_pull_request
+      - github__create_repository
+      - github__fork_repository
+      - github__actions_run_trigger
+    requires: "false"
+
+  # ---- read-only server: nothing to forbid, only to count ------------------
+
+  # Etherscan reads public chain data and cannot write anything, so the whole
+  # policy for it is a budget and an audit line.
+  - name: count_etherscan
+    match: etherscan__*
+    effect:
+      etherscan_calls: etherscan_calls + 1

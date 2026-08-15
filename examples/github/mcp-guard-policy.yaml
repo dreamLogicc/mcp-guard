@@ -1,0 +1,122 @@
+# Policy for GitHub's official MCP server.
+#
+# Tool names are that server's real ones, prefixed with the `github` key from
+# mcp-guard.yaml, and were checked against a live connection. GitHub is the
+# interesting case for this gateway because it both reads private code and
+# publishes to the whole world, so the read and the leak are two calls of one
+# session.
+#
+# Which tools exist depends on the enabled toolsets: a default remote connection
+# offers 44, without gists, discussions, actions or code scanning. Rules for
+# those are kept below anyway — a glob matching nothing costs nothing, and the
+# rule is in place the day someone turns the toolset on. Check yours before
+# trusting this file: any tool no action matches is forwarded unverified.
+
+default: allow
+
+patterns:
+  # Paths whose contents are credentials rather than code.
+  secret_paths:
+    - ".env"
+    - "/.ssh"
+    - "id_rsa"
+    - ".pem"
+    - "credentials"
+    - "secrets."
+    - ".npmrc"
+    - "terraform.tfstate"
+    - "serviceAccount"
+
+  # Branches nobody should be pushed to by an agent.
+  protected_branches:
+    - '"branch": "main"'
+    - '"branch": "master"'
+    - '"branch": "production"'
+    - '"branch": "release'
+
+state:
+  # Raised by reading anything credential-shaped, never cleared.
+  tainted:
+    type: bool
+    init: false
+  # Every accepted write, to bound what one runaway session can do.
+  writes:
+    type: int
+    init: 0
+
+invariants:
+  # An agent opening thirty pull requests is not doing the job you asked for.
+  - name: write_budget
+    expr: writes <= 10
+
+actions:
+  # Reading a secret-shaped path, or the secret-scanning alerts themselves,
+  # taints the session. Ordinary code reads do not — otherwise the first file
+  # read would block every later commit and the gateway would be unusable.
+  - name: read_repository
+    match:
+      - github__get_file_contents
+      - github__search_code
+      - github__search_commits
+      - github__get_repository_tree
+    effect:
+      tainted: tainted or matches(payload, secret_paths)
+
+  # Secret scanning tells you where the credentials are. Reading that is reading
+  # them for this purpose.
+  - name: read_security_alerts
+    match:
+      - github__run_secret_scanning
+      - github__list_secret_scanning_alerts
+      - github__get_secret_scanning_alert
+    effect:
+      tainted: true
+
+  # The exfiltration channels. A gist is world-readable the instant it exists and
+  # a comment is public on a public repo, so once the session has touched
+  # credentials none of these may be used. Every tool that writes text a human
+  # will read belongs here — review comments and replies included, which is easy
+  # to miss because they sound like part of reviewing rather than publishing.
+  - name: publish_publicly
+    match:
+      - github__add_issue_comment
+      - github__issue_write
+      - github__sub_issue_write
+      - github__create_pull_request
+      - github__pull_request_review_write
+      - github__add_comment_to_pending_review
+      - github__add_reply_to_pull_request_comment
+      - github__request_copilot_review
+      - github__create_gist
+      - github__update_gist
+      - github__discussion_comment_write
+    requires: not tainted
+    effect:
+      writes: writes + 1
+
+  # Repository writes: never onto a protected branch, and not after reading
+  # credentials either.
+  - name: write_repository
+    match:
+      - github__create_or_update_file
+      - github__push_files
+      - github__create_branch
+      - github__update_pull_request
+      - github__update_pull_request_branch
+    requires:
+      - not tainted
+      - not matches(payload, protected_branches)
+    effect:
+      writes: writes + 1
+
+  # Irreversible or high-blast-radius, and none of them are things an agent
+  # should do unattended. `false` is a guard that never holds, so these are
+  # refused whatever the state.
+  - name: never_unattended
+    match:
+      - github__delete_file
+      - github__merge_pull_request
+      - github__create_repository
+      - github__fork_repository
+      - github__actions_run_trigger
+    requires: "false"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,9 @@ from mcp_guard.schema import ConfigFile, ServerEntry, describe_errors
 
 CONFIG_ENV_VAR = "MCP_GUARD_CONFIG"
 POLICY_ENV_VAR = "MCP_GUARD_POLICY"
+ENV_FILE_ENV_VAR = "MCP_GUARD_ENV_FILE"
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigError(Exception):
@@ -35,6 +39,44 @@ def resolve_path(path: str | Path | None, *, env_var: str, flag: str, kind: str)
     if not resolved.is_file():
         raise ConfigError(f"{kind} {resolved} does not exist")
     return resolved
+
+
+def load_env_file(path: str | Path) -> list[str]:
+    """Load `KEY=value` lines into the environment, returning the names set.
+
+    The real environment wins, so an explicitly exported variable is never
+    overwritten by the file. Handy because a client that spawns the gateway —
+    especially a GUI one — may not carry your shell's exports.
+
+    Raises:
+        ConfigError: The file is missing or has a line that is not `KEY=value`.
+    """
+    target = Path(path).expanduser()
+    try:
+        text = target.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ConfigError(f"cannot read env file {target}: {exc}") from exc
+
+    if target.stat().st_mode & 0o077:
+        logger.warning("env file %s is readable by other users; consider chmod 600", target)
+
+    loaded: list[str] = []
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        line = line.removeprefix("export ").lstrip()
+        name, separator, value = line.partition("=")
+        name = name.strip()
+        if not separator or not name:
+            raise ConfigError(f"env file {target}, line {number}: expected KEY=value, got {raw.strip()!r}")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        if name not in os.environ:
+            os.environ[name] = value
+            loaded.append(name)
+    return loaded
 
 
 def _read_yaml(path: Path, kind: str) -> Any:

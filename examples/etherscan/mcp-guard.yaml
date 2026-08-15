@@ -1,0 +1,8 @@
+# Etherscan's official remote MCP server, covering 60+ chains.
+#
+# Auth is your Etherscan API key as a bearer token. The server rejects an
+# unauthenticated handshake outright, so a missing key fails at connect time.
+servers:
+  etherscan:
+    url: https://mcp.etherscan.io/mcp
+    token_env: ETHERSCAN_API_KEY

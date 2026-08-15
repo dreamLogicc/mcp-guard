@@ -1,0 +1,57 @@
+# Four upstreams at once: one local subprocess and three remote endpoints,
+# covering every transport and every credential form the gateway supports.
+#
+# The point of mixing them is the policy next door. Each server on its own is
+# unremarkable; together they form the read-here-publish-there paths that only a
+# gateway sitting in front of all of them can see.
+
+servers:
+  # 1. Local, over stdio. Paths are the host's, so this one has to run here.
+  fs:
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "${HOME}/work"
+
+  # 2. Remote, bearer token. `token_env` names the variable; the value never
+  #    touches this file and a missing one fails at startup.
+  github:
+    url: https://api.githubcopilot.com/mcp/
+    token_env: GITHUB_MCP_TOKEN
+
+  # 3. Remote, bearer token. Read-only server: 20 tools, none of them sign or
+  #    send a transaction.
+  etherscan:
+    url: https://mcp.etherscan.io/mcp
+    token_env: ETHERSCAN_API_KEY
+
+  # 4. Remote, no credentials at all — plenty of public servers work this way.
+  #    A key only raises the rate limit here, and it would go in as a header:
+  #
+  #      headers:
+  #        Authorization: Bearer ${CONTEXT7_API_KEY}
+  #
+  #    which for a bearer token is exactly what `token_env: CONTEXT7_API_KEY`
+  #    does in one line. Note that `${VAR}` is strict: name a variable you have
+  #    not set and the gateway refuses to start rather than connect without it.
+  docs:
+    url: https://mcp.context7.com/mcp
+
+  # The case `headers` exists for, and the only one `token_env` cannot cover: a
+  # server that wants something other than `Authorization: Bearer`. Self-hosted
+  # servers behind an access proxy are the usual example — two headers, neither
+  # of them a bearer token. Placeholder host, so it is left commented out.
+  #
+  # internal:
+  #   url: https://mcp.internal.example.com/mcp
+  #   headers:
+  #     CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}
+  #     CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}
+  #
+  # Or a plain API-key header:
+  #
+  # search:
+  #   url: https://search.example.com/mcp
+  #   headers:
+  #     X-Api-Key: ${SEARCH_API_KEY}

@@ -17,3 +17,8 @@ wheels/
 
 # Build artifacts
 dist/
+
+# Secrets
+.env
+.env.*
+!.env.example

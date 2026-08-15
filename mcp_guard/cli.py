@@ -11,7 +11,15 @@ import anyio
 
 from mcp_guard import audit
 from mcp_guard.auth import AuthError
-from mcp_guard.config import CONFIG_ENV_VAR, POLICY_ENV_VAR, ConfigError, load_policy_spec, load_upstreams
+from mcp_guard.config import (
+    CONFIG_ENV_VAR,
+    ENV_FILE_ENV_VAR,
+    POLICY_ENV_VAR,
+    ConfigError,
+    load_env_file,
+    load_policy_spec,
+    load_upstreams,
+)
 from mcp_guard.epca import EPCAPolicy, SpecError
 from mcp_guard.gateway import GatewayError, MCPGateway
 from mcp_guard.server import serve_http, serve_stdio
@@ -31,6 +39,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config", metavar="PATH", help=f"Server list (YAML). Defaults to ${CONFIG_ENV_VAR}.")
     parser.add_argument("--policy", metavar="PATH", help=f"ePCA policy (YAML). Defaults to ${POLICY_ENV_VAR}.")
+    parser.add_argument(
+        "--env-file",
+        metavar="PATH",
+        default=os.environ.get(ENV_FILE_ENV_VAR),
+        help=(
+            f"Load KEY=value lines into the environment before reading the config, for the "
+            f"tokens named by 'token_env' and '${{VAR}}'. Defaults to ${ENV_FILE_ENV_VAR}. "
+            "Existing variables win."
+        ),
+    )
     parser.add_argument(
         "--http",
         metavar="[HOST:]PORT",
@@ -81,6 +99,10 @@ def main(argv: list[str] | None = None) -> int:
     _setup_logging(args.log_level, args.color)
 
     try:
+        if args.env_file:
+            names = load_env_file(args.env_file)
+            logger.info("env file %s: set %s", args.env_file, ", ".join(names) or "nothing new")
+
         spec = load_policy_spec(args.policy)
         gateway = MCPGateway(policy=EPCAPolicy(spec), log_arguments=args.log_arguments)
         logger.info(

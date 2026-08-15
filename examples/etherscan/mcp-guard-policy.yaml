@@ -1,0 +1,47 @@
+# Policy for Etherscan's official MCP server.
+#
+# Worth saying plainly: every one of this server's 20 tools is read-only — it
+# reads public onchain data and nothing signs or sends a transaction. So there
+# is no leak channel here to close, and a taint rule would have nothing to
+# forbid. What is left for a policy is the other half of its job: bounding
+# cost and leaving an audit trail of what was queried.
+#
+# The interesting rules appear once this server sits next to one that can
+# write. Read a private key path through a filesystem or GitHub server, and it
+# is that server's publish tools the taint must block — see examples/github.
+
+default: allow
+
+state:
+  # Your API key has a rate limit and, above the free tier, a bill attached.
+  calls:
+    type: int
+    init: 0
+  # Log and transaction scans over wide ranges are the expensive ones.
+  heavy_calls:
+    type: int
+    init: 0
+
+invariants:
+  - name: query_budget
+    expr: calls <= 500
+  - name: heavy_query_budget
+    expr: heavy_calls <= 25
+
+actions:
+  # One catch-all counter. `etherscan__*` covers whatever the server adds later,
+  # so a new tool is budgeted from the day it appears rather than slipping past.
+  - name: count_queries
+    match: etherscan__*
+    effect:
+      calls: calls + 1
+
+  - name: count_heavy_queries
+    match:
+      - etherscan__get_logs
+      - etherscan__get_transactions
+      - etherscan__get_internal_transactions
+      - etherscan__get_token_transfers
+      - etherscan__get_token_top_holders
+    effect:
+      heavy_calls: heavy_calls + 1

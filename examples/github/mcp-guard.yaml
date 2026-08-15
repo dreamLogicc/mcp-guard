@@ -1,0 +1,8 @@
+# GitHub's official remote MCP server — no subprocess, just an HTTPS endpoint.
+#
+# Auth is a GitHub PAT as a bearer token. Keep it out of this file: token_env
+# names the variable, and the gateway fails at startup if it is unset.
+servers:
+  github:
+    url: https://api.githubcopilot.com/mcp/
+    token_env: GITHUB_MCP_TOKEN
