@@ -15,15 +15,17 @@ patterns:
   # Checked against the whole JSON payload, so one list covers `path`, `paths`,
   # `source`, `destination` and `pattern` alike.
   secret_paths:
-    - "/.ssh/"
+    # No trailing slashes: `/.ssh` catches the directory itself as well as the
+    # files under it, which `/.ssh/` alone would miss.
+    - "/.ssh"
     - "/.env"
     - ".env."
     - "id_rsa"
     - "id_ed25519"
     - ".pem"
     - ".p12"
-    - ".aws/credentials"
-    - ".kube/config"
+    - ".aws/"
+    - ".kube/"
     - ".netrc"
     - ".git-credentials"
     - ".npmrc"

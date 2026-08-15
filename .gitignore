@@ -14,3 +14,6 @@ wheels/
 /mcp-guard.yml
 /mcp-guard-policy.yaml
 /mcp-guard-policy.yml
+
+# Build artifacts
+dist/
