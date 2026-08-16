@@ -9,9 +9,9 @@ import sys
 
 import anyio
 
-from mcp_guard import audit
-from mcp_guard.auth import AuthError
-from mcp_guard.config import (
+from praxiom import audit
+from praxiom.auth import AuthError
+from praxiom.config import (
     CONFIG_ENV_VAR,
     ENV_FILE_ENV_VAR,
     POLICY_ENV_VAR,
@@ -20,16 +20,16 @@ from mcp_guard.config import (
     load_policy_spec,
     load_upstreams,
 )
-from mcp_guard.epca import EPCAPolicy, SpecError
-from mcp_guard.gateway import GatewayError, MCPGateway
-from mcp_guard.server import serve_http, serve_stdio
+from praxiom.epca import EPCAPolicy, SpecError
+from praxiom.gateway import GatewayError, MCPGateway
+from praxiom.server import serve_http, serve_stdio
 
-logger = logging.getLogger("mcp_guard.cli")
+logger = logging.getLogger("praxiom.cli")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mcp-guard",
+        prog="praxiom",
         description="MCP gateway: fronts several upstream MCP servers over one stdio connection.",
         epilog=(
             f"Both files are required, each from its flag or its env var "
@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
             registered.auth.validate(registered.name)
             logger.info("upstream %s -> %s", registered.name, registered.target)
     except (AuthError, ConfigError, GatewayError, SpecError) as exc:
-        print(f"mcp-guard: {exc}", file=sys.stderr)
+        print(f"praxiom: {exc}", file=sys.stderr)
         return 2
 
     if args.log_arguments == "full":
@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             anyio.run(serve_stdio, gateway)
     except ValueError:
-        print(f"mcp-guard: --http expects [HOST:]PORT, got {args.http!r}", file=sys.stderr)
+        print(f"praxiom: --http expects [HOST:]PORT, got {args.http!r}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
         return 130

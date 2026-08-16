@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import z3
 
-from mcp_guard.epca.expr import ExprError, compile_condition, compile_expr
+from praxiom.epca.expr import ExprError, compile_condition, compile_expr
 
 SCOPE = {
     "n": z3.Int("n"),

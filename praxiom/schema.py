@@ -6,7 +6,7 @@ in `headers` would mean an unauthenticated upstream, and a typo in a policy key
 would mean an unenforced restriction, both without a word of warning.
 
 These models describe the files. Turning a validated policy into Z3 terms is
-`mcp_guard.epca.spec`; building upstreams is `mcp_guard.config`.
+`praxiom.epca.spec`; building upstreams is `praxiom.config`.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ Text = Annotated[StrictStr, BeforeValidator(_as_text)]
 """A string field that tolerates a YAML scalar."""
 
 Expression = Text
-"""A policy expression, compiled later by `mcp_guard.epca.expr`."""
+"""A policy expression, compiled later by `praxiom.epca.expr`."""
 
 
 class Model(BaseModel):

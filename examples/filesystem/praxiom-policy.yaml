@@ -3,7 +3,7 @@
 # That server sandboxes itself to the directories in its argv, but inside them
 # .env and .ssh are as open as notes.md. This is what draws the distinction.
 #
-# Its tool names, prefixed with the `fs` key from mcp-guard.yaml:
+# Its tool names, prefixed with the `fs` key from praxiom.yaml:
 #   fs__read_file  fs__read_text_file  fs__read_media_file  fs__read_multiple_files
 #   fs__write_file  fs__edit_file  fs__create_directory  fs__move_file
 #   fs__list_directory  fs__list_directory_with_sizes  fs__directory_tree

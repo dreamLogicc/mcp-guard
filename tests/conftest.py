@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from mcp_guard.config import load_policy_spec
-from mcp_guard.epca import ReferenceMonitor
+from praxiom.config import load_policy_spec
+from praxiom.epca import ReferenceMonitor
 
 REPO = Path(__file__).resolve().parent.parent
 

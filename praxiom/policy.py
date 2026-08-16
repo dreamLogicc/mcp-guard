@@ -47,7 +47,7 @@ class PolicyDecision:
 
 
 class Policy:
-    """Base policy: forwards everything. See `mcp_guard.epca.EPCAPolicy`."""
+    """Base policy: forwards everything. See `praxiom.epca.EPCAPolicy`."""
 
     def check_tool_call(self, call: ToolCall) -> PolicyDecision:
         """Whether `call` may be forwarded to its upstream."""

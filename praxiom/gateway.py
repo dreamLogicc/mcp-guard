@@ -17,9 +17,9 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.shared.exceptions import MCPError
 
-from mcp_guard import audit
-from mcp_guard.auth import UpstreamAuth
-from mcp_guard.policy import Policy, PolicyDecision, ToolCall
+from praxiom import audit
+from praxiom.auth import UpstreamAuth
+from praxiom.policy import Policy, PolicyDecision, ToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ class MCPGateway:
     ) -> MCPGateway:
         """Build an unauthenticated gateway from `URL` or `name=URL` strings.
 
-        For tests and embedding; the CLI goes through `mcp_guard.config` instead.
+        For tests and embedding; the CLI goes through `praxiom.config` instead.
         """
         gateway = cls(policy=policy, separator=separator)
         for spec in urls:
@@ -365,7 +365,7 @@ def _error_result(message: str) -> types.CallToolResult:
 
 def _denied_result(call: ToolCall, decision: PolicyDecision) -> types.CallToolResult:
     reason = decision.reason or "denied by policy"
-    return _error_result(f"mcp-guard blocked {call.public_name!r}: {reason}")
+    return _error_result(f"praxiom blocked {call.public_name!r}: {reason}")
 
 
 def parse_upstream_spec(spec: str) -> tuple[str | None, str]:

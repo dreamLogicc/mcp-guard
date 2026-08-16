@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from mcp_guard.epca.monitor import ReferenceMonitor
-from mcp_guard.epca.spec import PolicySpec
-from mcp_guard.policy import Policy, PolicyDecision, ToolCall
+from praxiom.epca.monitor import ReferenceMonitor
+from praxiom.epca.spec import PolicySpec
+from praxiom.policy import Policy, PolicyDecision, ToolCall
 
 
 class EPCAPolicy(Policy):

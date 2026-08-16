@@ -1,6 +1,6 @@
 """The policy spec `Σ = ⟨S_ver, A, δ, s₀, Φ_safe⟩`, compiled from a validated file.
 
-The file's shape is `mcp_guard.schema.PolicyFile`; what is left here is turning it
+The file's shape is `praxiom.schema.PolicyFile`; what is left here is turning it
 into Z3 terms and cross-checking references between sections. Both happen at load
 time, so a broken axiom is a startup error rather than a surprise on the first call.
 """
@@ -14,8 +14,8 @@ from typing import Any
 import z3
 from pydantic import ValidationError
 
-from mcp_guard.epca.expr import ExprError, compile_condition, compile_expr
-from mcp_guard.schema import ActionEntry, PolicyFile, VarType, describe_errors
+from praxiom.epca.expr import ExprError, compile_condition, compile_expr
+from praxiom.schema import ActionEntry, PolicyFile, VarType, describe_errors
 
 _TYPES: dict[VarType, Any] = {"int": z3.Int, "bool": z3.Bool, "str": z3.String}
 _LITERALS: dict[VarType, Any] = {"int": z3.IntVal, "bool": z3.BoolVal, "str": z3.StringVal}

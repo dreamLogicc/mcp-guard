@@ -1,7 +1,7 @@
 # Policy for GitHub's official MCP server.
 #
 # Tool names are that server's real ones, prefixed with the `github` key from
-# mcp-guard.yaml, and were checked against a live connection. GitHub is the
+# praxiom.yaml, and were checked against a live connection. GitHub is the
 # interesting case for this gateway because it both reads private code and
 # publishes to the whole world, so the read and the leak are two calls of one
 # session.

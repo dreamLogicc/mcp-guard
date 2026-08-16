@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_guard.config import load_policy_spec, load_upstreams
-from mcp_guard.epca import ReferenceMonitor
+from praxiom.config import load_policy_spec, load_upstreams
+from praxiom.epca import ReferenceMonitor
 from tests.conftest import REPO
 
 EXAMPLES = sorted(p for p in (REPO / "examples").iterdir() if p.is_dir())
@@ -21,7 +21,7 @@ def _placeholder_credentials(monkeypatch):
 
 @pytest.mark.parametrize("directory", EXAMPLES, ids=lambda p: p.name)
 def test_example_config_loads(directory):
-    upstreams = load_upstreams(directory / "mcp-guard.yaml")
+    upstreams = load_upstreams(directory / "praxiom.yaml")
     assert upstreams
     for upstream in upstreams:
         assert upstream.url or upstream.command
@@ -29,13 +29,13 @@ def test_example_config_loads(directory):
 
 @pytest.mark.parametrize("directory", EXAMPLES, ids=lambda p: p.name)
 def test_example_policy_compiles_and_starts(directory):
-    spec = load_policy_spec(directory / "mcp-guard-policy.yaml")
+    spec = load_policy_spec(directory / "praxiom-policy.yaml")
     assert spec.actions, "an example policy with no actions teaches nothing"
     ReferenceMonitor(spec)  # also checks s₀ against the invariants
 
 
 def test_the_filesystem_example_blocks_the_two_step_leak():
-    spec = load_policy_spec(REPO / "examples/filesystem/mcp-guard-policy.yaml")
+    spec = load_policy_spec(REPO / "examples/filesystem/praxiom-policy.yaml")
     monitor = ReferenceMonitor(spec)
 
     assert monitor.check("fs__write_file", "fs", {"path": "/w/a.txt", "content": "x"}).allowed
@@ -44,7 +44,7 @@ def test_the_filesystem_example_blocks_the_two_step_leak():
 
 
 def test_the_mixed_example_carries_the_taint_between_servers():
-    spec = load_policy_spec(REPO / "examples/mixed/mcp-guard-policy.yaml")
+    spec = load_policy_spec(REPO / "examples/mixed/praxiom-policy.yaml")
     monitor = ReferenceMonitor(spec)
 
     assert monitor.check("github__create_pull_request", "github", {"title": "t"}).allowed
@@ -56,7 +56,7 @@ def test_the_mixed_example_carries_the_taint_between_servers():
 
 
 def test_the_etherscan_example_only_counts():
-    spec = load_policy_spec(REPO / "examples/etherscan/mcp-guard-policy.yaml")
+    spec = load_policy_spec(REPO / "examples/etherscan/praxiom-policy.yaml")
     monitor = ReferenceMonitor(spec)
     assert monitor.check("etherscan__get_gas_oracle", "etherscan", {"chainid": "1"}).allowed
     assert monitor.state["calls"] == 1

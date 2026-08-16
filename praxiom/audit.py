@@ -12,7 +12,7 @@ import logging
 import re
 from typing import Any
 
-logger = logging.getLogger("mcp_guard.audit")
+logger = logging.getLogger("praxiom.audit")
 
 ARGUMENT_MODES = ("none", "redacted", "full")
 DEFAULT_ARGUMENT_WIDTH = 88
@@ -126,7 +126,7 @@ class Formatter(logging.Formatter):
         if record.name == logger.name:
             line = f"{stamp}  {message}"
         else:
-            source = record.name.removeprefix("mcp_guard.").removeprefix("mcp_guard")
+            source = record.name.removeprefix("praxiom.").removeprefix("praxiom")
             tag = paint(f"{source or 'guard'}", "blue")
             if record.levelno >= logging.WARNING:
                 tag = paint(record.levelname.lower(), "red" if record.levelno >= logging.ERROR else "yellow")

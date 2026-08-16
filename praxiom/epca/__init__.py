@@ -6,10 +6,10 @@ payload, is translated into first-order logic by a fixed table, and is checked
 against human-authored axioms by Z3.
 """
 
-from mcp_guard.epca.expr import ExprError
-from mcp_guard.epca.monitor import ReferenceMonitor, Verdict
-from mcp_guard.epca.policy import EPCAPolicy
-from mcp_guard.epca.spec import Action, Invariant, PolicySpec, SpecError, StateVar, load_policy
+from praxiom.epca.expr import ExprError
+from praxiom.epca.monitor import ReferenceMonitor, Verdict
+from praxiom.epca.policy import EPCAPolicy
+from praxiom.epca.spec import Action, Invariant, PolicySpec, SpecError, StateVar, load_policy
 
 __all__ = [
     "Action",

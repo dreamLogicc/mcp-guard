@@ -10,14 +10,14 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from mcp_guard.auth import UpstreamAuth, expand_env
-from mcp_guard.epca.spec import PolicySpec, SpecError, load_policy
-from mcp_guard.gateway import GatewayError, Upstream
-from mcp_guard.schema import ConfigFile, ServerEntry, describe_errors
+from praxiom.auth import UpstreamAuth, expand_env
+from praxiom.epca.spec import PolicySpec, SpecError, load_policy
+from praxiom.gateway import GatewayError, Upstream
+from praxiom.schema import ConfigFile, ServerEntry, describe_errors
 
-CONFIG_ENV_VAR = "MCP_GUARD_CONFIG"
-POLICY_ENV_VAR = "MCP_GUARD_POLICY"
-ENV_FILE_ENV_VAR = "MCP_GUARD_ENV_FILE"
+CONFIG_ENV_VAR = "PRAXIOM_CONFIG"
+POLICY_ENV_VAR = "PRAXIOM_POLICY"
+ENV_FILE_ENV_VAR = "PRAXIOM_ENV_FILE"
 
 logger = logging.getLogger(__name__)
 

@@ -6,9 +6,9 @@ import textwrap
 
 import pytest
 
-from mcp_guard.cli import build_parser, main
-from mcp_guard.gateway import MCPGateway
-from mcp_guard.server import SERVER_NAME, build_server
+from praxiom.cli import build_parser, main
+from praxiom.gateway import MCPGateway
+from praxiom.server import SERVER_NAME, build_server
 
 POLICY = """
 state:
@@ -26,7 +26,7 @@ CONFIG = 'servers: {a: "https://example.invalid/mcp"}\n'
 
 @pytest.fixture(autouse=True)
 def _no_ambient_configuration(monkeypatch):
-    for name in ("MCP_GUARD_CONFIG", "MCP_GUARD_POLICY", "MCP_GUARD_ENV_FILE"):
+    for name in ("PRAXIOM_CONFIG", "PRAXIOM_POLICY", "PRAXIOM_ENV_FILE"):
         monkeypatch.delenv(name, raising=False)
 
 

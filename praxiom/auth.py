@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 
 import httpx2
 
-TOKEN_ENV_PREFIX = "MCP_GUARD_TOKEN_"
-"""Per-upstream fallback env var: `MCP_GUARD_TOKEN_GITHUB` for upstream `github`."""
+TOKEN_ENV_PREFIX = "PRAXIOM_TOKEN_"
+"""Per-upstream fallback env var: `PRAXIOM_TOKEN_GITHUB` for upstream `github`."""
 
 
 class AuthError(Exception):
@@ -24,7 +24,7 @@ class UpstreamAuth:
     """How to authenticate against one upstream.
 
     Tried in order: explicit `headers`, `token`, `token_env`, then the
-    `MCP_GUARD_TOKEN_<NAME>` convention. `httpx_auth` is orthogonal and always applied.
+    `PRAXIOM_TOKEN_<NAME>` convention. `httpx_auth` is orthogonal and always applied.
     """
 
     headers: dict[str, str] = field(default_factory=dict)

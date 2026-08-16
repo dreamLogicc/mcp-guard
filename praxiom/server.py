@@ -10,11 +10,11 @@ from mcp.server.context import ServerRequestContext
 from mcp.server.lowlevel.server import NotificationOptions, Server
 from mcp.server.stdio import stdio_server
 
-from mcp_guard.gateway import MCPGateway
+from praxiom.gateway import MCPGateway
 
 logger = logging.getLogger(__name__)
 
-SERVER_NAME = "mcp-guard"
+SERVER_NAME = "praxiom"
 SERVER_VERSION = "0.1.0"
 INSTRUCTIONS = (
     "Gateway over several MCP servers. Tool names carry their upstream as a prefix. "

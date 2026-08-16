@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="720" height="300" role="img"
-     aria-label="An agent's tool calls pass through mcp-guard to MCP A, B and C. read_docs, list_files and read_secret all reach their server; the answer to read_secret carries a secret back through the gateway and taints the session, after which send_message and create_issue are turned back at the gateway.">
-  <title>mcp-guard: reading a secret is allowed — publishing after it is not</title>
+     aria-label="An agent's tool calls pass through praxiom to MCP A, B and C. read_docs, list_files and read_secret all reach their server; the answer to read_secret carries a secret back through the gateway and taints the session, after which send_message and create_issue are turned back at the gateway.">
+  <title>praxiom: reading a secret is allowed — publishing after it is not</title>
   <style>
     .bg    { fill: #ffffff }
     .fg    { fill: #1f2328 }
@@ -134,7 +134,7 @@
   <text class="fg" x="46" y="155">agent</text>
 
   <rect class="gate" x="252" y="126" width="126" height="48" rx="8" stroke-width="1"/>
-  <text class="fg" x="272" y="149">mcp-guard</text>
+  <text class="fg" x="272" y="149">praxiom</text>
   <text class="dim small" x="272" y="165">policy check</text>
 
   <g transform="translate(315, 108)" text-anchor="middle">

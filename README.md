@@ -1,9 +1,9 @@
-# mcp-guard
+# praxiom
 
 An MCP gateway that fronts several MCP servers behind one connection and checks
 every tool call against a formal policy before forwarding it.
 
-![mcp-guard proxying an agent's tool calls: reading a secret through one server
+![praxiom proxying an agent's tool calls: reading a secret through one server
 closes the exits on the others](assets/demo.svg)
 
 The client sees one server. Tools keep their upstream as a prefix — `github`'s
@@ -43,7 +43,7 @@ No language model takes part in the decision.
 ## Install
 
 ```bash
-uv tool install mcp-guard      # or: pip install mcp-guard
+uv tool install praxiom      # or: pip install praxiom
 ```
 
 Python 3.12+.
@@ -54,14 +54,14 @@ Two files, both required, each from its flag or its environment variable. There
 are no default locations: running unverified should be something you asked for.
 
 ```bash
-mcp-guard --config mcp-guard.yaml --policy mcp-guard-policy.yaml
+praxiom --config praxiom.yaml --policy praxiom-policy.yaml
 ```
 
 | Flag | Environment | |
 | --- | --- | --- |
-| `--config PATH` | `MCP_GUARD_CONFIG` | Upstream servers |
-| `--policy PATH` | `MCP_GUARD_POLICY` | ePCA policy |
-| `--env-file PATH` | `MCP_GUARD_ENV_FILE` | `KEY=value` lines loaded before the config |
+| `--config PATH` | `PRAXIOM_CONFIG` | Upstream servers |
+| `--policy PATH` | `PRAXIOM_POLICY` | ePCA policy |
+| `--env-file PATH` | `PRAXIOM_ENV_FILE` | `KEY=value` lines loaded before the config |
 | `--http [HOST:]PORT` | | Serve over streamable HTTP instead of stdio |
 | `--log-arguments` | | `none`, `redacted` (default), `full` |
 | `--log-level` | | Default `INFO`; logs go to stderr |
@@ -95,7 +95,7 @@ servers:
 ```
 
 Credentials in order: `headers`, `token` (a literal — prefer the others),
-`token_env`, then `MCP_GUARD_TOKEN_<NAME>`. `${VAR}` expands from the
+`token_env`, then `PRAXIOM_TOKEN_<NAME>`. `${VAR}` expands from the
 environment anywhere in the file and is strict — an unset variable stops startup
 rather than connecting without the credential. Header values never reach the
 log, only their names. Unknown keys are rejected, because a misspelled `headers`
@@ -153,17 +153,17 @@ fails at startup. Denials name the axiom from Z3's unsat core and reach the
 client as `is_error=True`, so the model can adapt:
 
 ```
-mcp-guard blocked 'fs__write_file': fails guard 'no_writes_after_secret_read'
+praxiom blocked 'fs__write_file': fails guard 'no_writes_after_secret_read'
   [state: tainted=True, secret_reads=1]
 ```
 
 ## Claude Code
 
 ```bash
-claude mcp add guard \
-  --env MCP_GUARD_CONFIG=/path/to/mcp-guard.yaml \
-  --env MCP_GUARD_POLICY=/path/to/mcp-guard-policy.yaml \
-  -- uv run --directory /path/to/mcp-guard mcp-guard
+claude mcp add praxiom \
+  --env PRAXIOM_CONFIG=/path/to/praxiom.yaml \
+  --env PRAXIOM_POLICY=/path/to/praxiom-policy.yaml \
+  -- uv run --directory /path/to/praxiom praxiom
 ```
 
 Remove the direct entries for any server you put behind the gateway — two paths
@@ -178,16 +178,16 @@ the model to prefer the MCP tools is a request, not a control. Close them with
 from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPToolset, StdioTransport
 
-guard = MCPToolset(
+praxiom = MCPToolset(
     StdioTransport(
         command="uv",
-        args=["run", "--directory", "/path/to/mcp-guard", "mcp-guard"],
-        env={"MCP_GUARD_CONFIG": "…", "MCP_GUARD_POLICY": "…"},
+        args=["run", "--directory", "/path/to/praxiom", "praxiom"],
+        env={"PRAXIOM_CONFIG": "…", "PRAXIOM_POLICY": "…"},
     ),
     tool_error_behavior="failed",
 )
 
-agent = Agent("anthropic:claude-sonnet-4-6", toolsets=[guard])
+agent = Agent("anthropic:claude-sonnet-4-6", toolsets=[praxiom])
 async with agent:
     result = await agent.run("read the config and open a PR")
 ```

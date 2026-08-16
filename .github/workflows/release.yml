@@ -6,9 +6,9 @@ name: Release
 #
 # One-time setup on PyPI, before the first tag:
 #   Your projects → Publishing → Add a pending publisher
-#     PyPI project name: mcp-guard
+#     PyPI project name: praxiom
 #     Owner:             dreamLogicc
-#     Repository:        mcp-guard
+#     Repository:        praxiom
 #     Workflow name:     release.yml
 #     Environment:       pypi
 #

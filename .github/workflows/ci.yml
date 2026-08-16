@@ -38,7 +38,7 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Test
-        run: uv run pytest --cov=mcp_guard --cov-report=term-missing
+        run: uv run pytest --cov=praxiom --cov-report=term-missing
 
   package:
     runs-on: ubuntu-latest
@@ -57,8 +57,8 @@ jobs:
         run: |
           uv venv /tmp/probe
           VIRTUAL_ENV=/tmp/probe uv pip install dist/*.whl
-          cd /tmp && /tmp/probe/bin/mcp-guard --help > /dev/null
-          cd /tmp && /tmp/probe/bin/python -c "import mcp_guard; print(mcp_guard.__all__)"
+          cd /tmp && /tmp/probe/bin/praxiom --help > /dev/null
+          cd /tmp && /tmp/probe/bin/python -c "import praxiom; print(praxiom.__all__)"
 
       - uses: actions/upload-artifact@v4
         with:

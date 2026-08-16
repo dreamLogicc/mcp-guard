@@ -14,7 +14,7 @@ from typing import Any
 
 import z3
 
-from mcp_guard.epca.spec import Action, PolicySpec, SpecError, has_type
+from praxiom.epca.spec import Action, PolicySpec, SpecError, has_type
 
 GUARD_PREFIX = "guard:"
 INVARIANT_PREFIX = "invariant:"

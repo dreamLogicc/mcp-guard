@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from mcp_guard.config import load_policy_spec
-from mcp_guard.epca import EPCAPolicy
-from mcp_guard.gateway import GatewayError, MCPGateway, Upstream, explain
+from praxiom.config import load_policy_spec
+from praxiom.epca import EPCAPolicy
+from praxiom.gateway import GatewayError, MCPGateway, Upstream, explain
 from tests.conftest import TAINT_POLICY
 
 STUB = Path(__file__).with_name("upstream_stub.py")
@@ -51,7 +51,7 @@ async def test_a_refused_call_never_reaches_the_upstream(gateway):
 
     assert result.is_error
     text = result.content[0].text
-    assert "mcp-guard blocked 'fs__write_file'" in text
+    assert "praxiom blocked 'fs__write_file'" in text
     assert "no_writes_after_secret_read" in text
     assert "wrote" not in text, "the upstream must not have run"
 
@@ -95,7 +95,7 @@ class TestUpstreamValidation:
             Upstream(name="a", url="http://x/mcp", command="npx")
 
     def test_headers_are_meaningless_over_stdio(self):
-        from mcp_guard.auth import UpstreamAuth
+        from praxiom.auth import UpstreamAuth
 
         with pytest.raises(GatewayError, match="no HTTP headers"):
             Upstream(name="a", command="npx", auth=UpstreamAuth(token="t"))

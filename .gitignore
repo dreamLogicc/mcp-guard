@@ -10,10 +10,10 @@ wheels/
 .venv
 
 # Local config may hold credentials (anchored: examples/ stays tracked)
-/mcp-guard.yaml
-/mcp-guard.yml
-/mcp-guard-policy.yaml
-/mcp-guard-policy.yml
+/praxiom.yaml
+/praxiom.yml
+/praxiom-policy.yaml
+/praxiom-policy.yml
 
 # Build artifacts
 dist/

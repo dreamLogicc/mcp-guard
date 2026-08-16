@@ -1,12 +1,25 @@
 [project]
-name = "mcp-guard"
+name = "praxiom"
 version = "0.1.0"
 description = "An MCP gateway that fronts several MCP servers and verifies every tool call against a formal policy"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
-keywords = ["mcp", "gateway", "proxy", "security", "guardrail", "smt", "z3"]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "gateway",
+    "proxy",
+    "security",
+    "guardrail",
+    "agent",
+    "llm",
+    "formal-verification",
+    "smt",
+    "z3",
+    "taint-tracking",
+]
 authors = [{ name = "Sergey Gondin", email = "gondin02@gmail.com" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -32,21 +45,21 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/dreamLogicc/mcp-guard"
+Repository = "https://github.com/dreamLogicc/praxiom"
 
 [project.scripts]
-mcp-guard = "mcp_guard.cli:main"
+praxiom = "praxiom.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["mcp_guard"]
-artifacts = ["mcp_guard/py.typed"]
+packages = ["praxiom"]
+artifacts = ["praxiom/py.typed"]
 
 [tool.hatch.build.targets.sdist]
-include = ["mcp_guard", "examples", "README.md", "LICENSE"]
+include = ["praxiom", "examples", "README.md", "LICENSE"]
 
 [dependency-groups]
 dev = [

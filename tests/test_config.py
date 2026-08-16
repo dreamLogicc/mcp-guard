@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from mcp_guard.auth import AuthError, UpstreamAuth
-from mcp_guard.config import ConfigError, load_env_file, load_upstreams, resolve_path
+from praxiom.auth import AuthError, UpstreamAuth
+from praxiom.config import ConfigError, load_env_file, load_upstreams, resolve_path
 
 
 @pytest.fixture
@@ -83,9 +83,9 @@ def test_an_unset_variable_stops_startup(write_config, monkeypatch):
 
 
 def test_resolve_path_requires_a_source(monkeypatch):
-    monkeypatch.delenv("MCP_GUARD_CONFIG", raising=False)
-    with pytest.raises(ConfigError, match=r"pass --config PATH or set \$MCP_GUARD_CONFIG"):
-        resolve_path(None, env_var="MCP_GUARD_CONFIG", flag="--config", kind="config")
+    monkeypatch.delenv("PRAXIOM_CONFIG", raising=False)
+    with pytest.raises(ConfigError, match=r"pass --config PATH or set \$PRAXIOM_CONFIG"):
+        resolve_path(None, env_var="PRAXIOM_CONFIG", flag="--config", kind="config")
 
 
 def test_resolve_path_reports_a_missing_file(tmp_path):
@@ -134,11 +134,11 @@ class TestCredentialPrecedence:
             UpstreamAuth(token_env="T").resolve_headers("x")
 
     def test_the_naming_convention_is_the_last_resort(self, monkeypatch):
-        monkeypatch.setenv("MCP_GUARD_TOKEN_GITHUB", "conventional")
+        monkeypatch.setenv("PRAXIOM_TOKEN_GITHUB", "conventional")
         assert UpstreamAuth().resolve_headers("github") == {"Authorization": "Bearer conventional"}
 
     def test_no_credentials_means_no_headers(self, monkeypatch):
-        monkeypatch.delenv("MCP_GUARD_TOKEN_PLAIN", raising=False)
+        monkeypatch.delenv("PRAXIOM_TOKEN_PLAIN", raising=False)
         assert UpstreamAuth().resolve_headers("plain") == {}
 
     def test_describe_never_shows_a_value(self, monkeypatch):

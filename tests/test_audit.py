@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_guard import audit
+from praxiom import audit
 
 
 @pytest.mark.parametrize(
@@ -54,7 +54,7 @@ def test_shorten_keeps_both_ends():
 
 
 def test_an_audit_line_carries_the_verdict_tool_and_latency(caplog):
-    with caplog.at_level("INFO", logger="mcp_guard.audit"):
+    with caplog.at_level("INFO", logger="praxiom.audit"):
         audit.call(
             verdict="DENY",
             tool="fs__write_file",

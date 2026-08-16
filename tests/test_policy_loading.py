@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_guard.config import ConfigError, load_policy_spec
+from praxiom.config import ConfigError, load_policy_spec
 
 VALID = """state:
   n: {type: int, init: 0}
@@ -84,7 +84,7 @@ def test_an_eval_attempt_is_refused_at_load_time(write_policy):
 
 
 def test_the_initial_state_must_satisfy_the_invariants(write_policy):
-    from mcp_guard.epca import ReferenceMonitor, SpecError
+    from praxiom.epca import ReferenceMonitor, SpecError
 
     spec = load_policy_spec(
         write_policy("""
