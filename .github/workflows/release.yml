@@ -53,6 +53,13 @@ jobs:
           uv run ruff check .
           uv run pytest
 
+      # An index reserves a filename forever — deleting a release does not free
+      # it. So a dry run gets its own throwaway version each time, and the real
+      # one in pyproject.toml stays unspent. Only the checkout is edited.
+      - name: Give the dry run a fresh version
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+        run: uv version "$(uv version --short).dev${{ github.run_number }}"
+
       - name: Build
         run: uv build
 
