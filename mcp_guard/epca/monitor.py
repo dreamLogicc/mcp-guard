@@ -93,7 +93,9 @@ class ReferenceMonitor:
                 solver.assert_and_track(guard, f"{GUARD_PREFIX}{label}")
         self._assert_transition(solver, actions)
         for invariant in self._spec.invariants:
-            solver.assert_and_track(self._at_next_state(invariant.term), f"{INVARIANT_PREFIX}{invariant.name}")
+            solver.assert_and_track(
+                self._at_next_state(invariant.term), f"{INVARIANT_PREFIX}{invariant.name}"
+            )
 
         names = tuple(action.name for action in actions)
         if solver.check() == z3.sat:
@@ -172,7 +174,8 @@ class ReferenceMonitor:
         if invariants:
             sources = {inv.name: inv.source for inv in self._spec.invariants}
             parts.append(
-                "violates " + ", ".join(f"invariant {name!r} ({sources.get(name, '?')})" for name in invariants)
+                "violates "
+                + ", ".join(f"invariant {name!r} ({sources.get(name, '?')})" for name in invariants)
             )
         if guards:
             parts.append("fails guard " + ", ".join(repr(name) for name in guards))

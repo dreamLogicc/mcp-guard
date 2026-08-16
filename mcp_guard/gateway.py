@@ -234,11 +234,10 @@ class MCPGateway:
 
     async def refresh_tools(self) -> None:
         """Re-fetch `tools/list` from every connected upstream, in parallel."""
-        async with self._refresh_lock:
-            async with anyio.create_task_group() as tg:
-                for upstream in self._upstreams.values():
-                    if upstream.connected:
-                        tg.start_soon(self._load_tools, upstream)
+        async with self._refresh_lock, anyio.create_task_group() as tg:
+            for upstream in self._upstreams.values():
+                if upstream.connected:
+                    tg.start_soon(self._load_tools, upstream)
 
     async def _load_tools(self, upstream: Upstream) -> None:
         assert upstream.client is not None
@@ -283,7 +282,9 @@ class MCPGateway:
             raise GatewayError(f"upstream {upstream_name!r} has no tool {tool_name!r}")
         return upstream, tool
 
-    async def call_tool(self, public_name: str, arguments: dict[str, Any] | None = None) -> types.CallToolResult:
+    async def call_tool(
+        self, public_name: str, arguments: dict[str, Any] | None = None
+    ) -> types.CallToolResult:
         """Check the policy, then forward the call to the owning upstream.
 
         Denials and failures come back as `is_error` results rather than exceptions,

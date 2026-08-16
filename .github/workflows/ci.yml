@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["**"]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --all-groups --python ${{ matrix.python-version }}
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Test
+        run: uv run pytest --cov=mcp_guard --cov-report=term-missing
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Build
+        run: uv build
+
+      # The README is the PyPI page; a wheel that builds but whose metadata is
+      # rejected at upload is worth catching here rather than at release time.
+      - name: Check metadata
+        run: uvx twine check --strict dist/*
+
+      # The examples ship in the sdist, so they must survive a real install.
+      - name: Install the wheel and run the CLI from outside the source tree
+        run: |
+          uv venv /tmp/probe
+          VIRTUAL_ENV=/tmp/probe uv pip install dist/*.whl
+          cd /tmp && /tmp/probe/bin/mcp-guard --help > /dev/null
+          cd /tmp && /tmp/probe/bin/python -c "import mcp_guard; print(mcp_guard.__all__)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

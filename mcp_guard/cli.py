@@ -37,8 +37,12 @@ def build_parser() -> argparse.ArgumentParser:
             "unverified must be something you asked for, not something you got by omission."
         ),
     )
-    parser.add_argument("--config", metavar="PATH", help=f"Server list (YAML). Defaults to ${CONFIG_ENV_VAR}.")
-    parser.add_argument("--policy", metavar="PATH", help=f"ePCA policy (YAML). Defaults to ${POLICY_ENV_VAR}.")
+    parser.add_argument(
+        "--config", metavar="PATH", help=f"Server list (YAML). Defaults to ${CONFIG_ENV_VAR}."
+    )
+    parser.add_argument(
+        "--policy", metavar="PATH", help=f"ePCA policy (YAML). Defaults to ${POLICY_ENV_VAR}."
+    )
     parser.add_argument(
         "--env-file",
         metavar="PATH",

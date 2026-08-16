@@ -22,3 +22,10 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Test artifacts
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.ruff_cache/

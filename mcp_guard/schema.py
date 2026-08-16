@@ -89,9 +89,7 @@ class ServerEntry(Model):
         if bool(self.url) == bool(self.command):
             raise ValueError("give exactly one of 'url' (remote) or 'command' (local stdio server)")
         if self.command and (self.headers or self.token or self.token_env):
-            raise ValueError(
-                "a stdio server has no HTTP headers; pass its credentials through 'env' instead"
-            )
+            raise ValueError("a stdio server has no HTTP headers; pass its credentials through 'env' instead")
         if self.url and (self.args or self.env or self.cwd):
             raise ValueError("'args', 'env' and 'cwd' belong to a 'command' server, not a 'url' one")
         return self

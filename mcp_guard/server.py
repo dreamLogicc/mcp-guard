@@ -84,9 +84,7 @@ async def serve_http(gateway: MCPGateway, host: str, port: int, path: str = "/mc
         app = server.streamable_http_app(streamable_http_path=path, host=host)
         _announce(gateway, f"http://{host}:{port}{path}")
         if host not in ("127.0.0.1", "localhost", "::1"):
-            logger.warning(
-                "bound to %s: anyone who can reach this port can call every upstream tool", host
-            )
+            logger.warning("bound to %s: anyone who can reach this port can call every upstream tool", host)
         # log_config=None keeps uvicorn from replacing the audit formatter.
         config = uvicorn.Config(app, host=host, port=port, log_config=None, access_log=False)
         await uvicorn.Server(config).serve()
