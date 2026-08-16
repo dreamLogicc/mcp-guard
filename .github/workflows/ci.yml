@@ -50,13 +50,9 @@ jobs:
 
       - name: Build
         run: uv build
-
-      # The README is the PyPI page; a wheel that builds but whose metadata is
-      # rejected at upload is worth catching here rather than at release time.
       - name: Check metadata
         run: uvx twine check --strict dist/*
 
-      # The examples ship in the sdist, so they must survive a real install.
       - name: Install the wheel and run the CLI from outside the source tree
         run: |
           uv venv /tmp/probe
