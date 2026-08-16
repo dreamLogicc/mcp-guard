@@ -34,7 +34,7 @@ transition $\delta : S_{ver} \times A \to S_{ver}$, an initial state, and the
 invariants. Each call becomes a typed payload $j$, is translated into
 first-order logic by a fixed table, and Z3 decides the joint formula
 
-$$C = s \ \wedge\ ⟦j⟧_{SMT} \ \wedge\ \Phi_{safe}(s') \qquad s' = \delta(s, a)$$
+$$C = s \ \wedge\ [[j]]_{SMT} \ \wedge\ \Phi_{safe}(s') \qquad s' = \delta(s, a)$$
 
 against the state the call *would* produce. SAT forwards it and commits the
 transition; UNSAT is the paper's algebraic deadlock — blocked, state unchanged.
